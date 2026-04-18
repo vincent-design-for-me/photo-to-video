@@ -2,11 +2,23 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildGeminiGenerateContentUrl, extractGeminiInlineImageData, getImageGenerationConfig, getLLMConfig, readGeminiJsonResponse } from "./geminiCompat";
 
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, delayMs = 5000): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.ok || ![429, 503, 504].includes(response.status)) return response;
+    if (attempt === maxRetries) return response;
+    console.log(`[nanoBanana] attempt ${attempt}/${maxRetries} got ${response.status}, retrying in ${delayMs / 1000}s...`);
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return fetch(url, options);
+}
+
 type GenerateInteriorFrameInput = {
   jobId: string;
   sourceImagePath: string;
   prompt: string;
   aspectRatio: string;
+  resolution?: string;
   outputPath: string;
 };
 
@@ -28,7 +40,7 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
     }
 
     const imageUrl = buildGeminiGenerateContentUrl(config.baseUrl, config.model);
-    const response = await fetch(imageUrl, {
+    const requestOptions: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -48,12 +60,13 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
           responseModalities: ["TEXT", "IMAGE"],
           imageConfig: {
             aspectRatio: input.aspectRatio,
-            novartResolution: "2k"
+            novartResolution: input.resolution === "4k" ? "4k" : "2k"
           }
         }
       })
-    });
+    };
 
+    const response = await fetchWithRetry(imageUrl, requestOptions);
     const data = extractGeminiInlineImageData(await readGeminiJsonResponse(response));
     if (!data) {
       throw new Error("Third-party Gemini endpoint did not return an inline image");

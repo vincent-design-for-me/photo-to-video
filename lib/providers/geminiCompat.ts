@@ -1,8 +1,4 @@
 type ImageGenerationEnv = Record<string, string | undefined> & {
-  GEMINI_API_BASE_URL?: string;
-  GEMINI_API_KEY?: string;
-  GEMINI_IMAGE_MODEL?: string;
-  GEMINI_API_FORMAT?: string;
   IMAGE_BASE_URL?: string;
   IMAGE_API_KEY?: string;
   IMAGE_MODEL?: string;
@@ -27,11 +23,14 @@ export function buildGeminiGenerateContentUrl(baseUrl: string, model: string): s
 }
 
 export function getImageGenerationConfig(env: ImageGenerationEnv = process.env): ImageGenerationConfig {
+  if (!env.IMAGE_MODEL) {
+    throw new Error("IMAGE_MODEL is not set. Add it to .env.local (e.g. IMAGE_MODEL=nova-image-2).");
+  }
   return {
-    baseUrl: env.GEMINI_API_BASE_URL ?? env.IMAGE_BASE_URL,
-    apiKey: env.GEMINI_API_KEY ?? env.IMAGE_API_KEY,
-    model: env.GEMINI_IMAGE_MODEL ?? env.IMAGE_MODEL ?? "gemini-3-pro-image-preview",
-    format: env.GEMINI_API_FORMAT ?? env.IMAGE_API_FORMAT ?? "gemini-native"
+    baseUrl: env.IMAGE_BASE_URL,
+    apiKey: env.IMAGE_API_KEY,
+    model: env.IMAGE_MODEL,
+    format: env.IMAGE_API_FORMAT ?? "gemini-native"
   };
 }
 
@@ -72,18 +71,18 @@ export async function readGeminiJsonResponse(response: Response): Promise<unknow
   const body = await response.text();
 
   if (!response.ok) {
-    throw new Error(`Gemini image generation failed (${response.status}): ${body.slice(0, 500)}`);
+    throw new Error(`Image generation failed (${response.status}): ${body.slice(0, 500)}`);
   }
 
   if (!contentType.toLowerCase().includes("json")) {
     throw new Error(
-      `Gemini endpoint returned ${contentType || "an unknown content type"} instead of JSON. Check GEMINI_API_BASE_URL or IMAGE_BASE_URL; it must be an API root, not a website or dashboard page. Response preview: ${body.slice(0, 160)}`
+      `Image endpoint returned ${contentType || "an unknown content type"} instead of JSON. Check IMAGE_BASE_URL; it must be an API root, not a website or dashboard page. Response preview: ${body.slice(0, 160)}`
     );
   }
 
   try {
     return JSON.parse(body);
   } catch (error) {
-    throw new Error(`Gemini endpoint returned invalid JSON. Check GEMINI_API_BASE_URL. ${error instanceof Error ? error.message : ""}`);
+    throw new Error(`Image endpoint returned invalid JSON. Check IMAGE_BASE_URL. ${error instanceof Error ? error.message : ""}`);
   }
 }

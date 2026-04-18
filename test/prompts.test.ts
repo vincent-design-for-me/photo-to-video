@@ -40,11 +40,23 @@ test("prompts include interior ad constraints and avoid unwanted artifacts", () 
   const imagePrompt = buildNanoBananaPrompt("modern-luxury");
   const motionPrompt = buildKlingMotionPrompt("soft dolly-in");
 
-  assert.match(imagePrompt, /high-quality Nano Banana prompt/i);
+  assert.match(imagePrompt, /Analyze the uploaded interior image/i);
   assert.match(imagePrompt, /Do NOT change the room layout/i);
-  assert.match(imagePrompt, /Preserve identity, face, body, and pose exactly/i);
   assert.match(imagePrompt, /Style: Modern Luxury/i);
-  assert.match(imagePrompt, /marble, velvet, and brass/i);
-  assert.match(motionPrompt, /stable geometry/i);
-  assert.match(motionPrompt, /no jitter/i);
+  assert.match(imagePrompt, /Marble white surfaces/i);
+  assert.match(motionPrompt, /Morph Transition/i);
+  assert.match(motionPrompt, /soft dolly-in/i);
+});
+
+test("image prompts ask the LLM to detect clutter and remove it from the rendering", () => {
+  const imagePrompt = buildNanoBananaPrompt("japandi");
+
+  assert.match(imagePrompt, /identify.*clutter/i);
+  assert.match(imagePrompt, /Do NOT preserve clutter/i);
+  assert.match(imagePrompt, /cardboard boxes/i);
+  assert.match(imagePrompt, /loose cables/i);
+  assert.match(imagePrompt, /mismatched ornaments/i);
+  assert.match(imagePrompt, /preserve.*architectural/i);
+  assert.match(imagePrompt, /Clutter Assessment/i);
+  assert.match(imagePrompt, /Clutter Removal & Styling Cleanup/i);
 });

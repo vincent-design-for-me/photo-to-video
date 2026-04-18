@@ -38,8 +38,8 @@ export async function generateKlingSkillClip(input: GenerateKlingSkillClipInput,
     });
   }
 
-  const firstFrameUrl = await resolvePublicFrameUrl(input.firstFramePath);
-  const lastFrameUrl = await resolvePublicFrameUrl(input.lastFramePath);
+  const firstFrameUrl = await resolvePublicFrameUrl(input.firstFramePath, input.jobId);
+  const lastFrameUrl = await resolvePublicFrameUrl(input.lastFramePath, input.jobId);
   const effectScene = process.env.KLING_SKILL_EFFECT_SCENE ?? process.env.KLING_SKILL_ID ?? "";
   if (!effectScene && !process.env.KLING_SKILL_REQUEST_TEMPLATE) {
     throw new Error("Kling Skill mode needs KLING_SKILL_EFFECT_SCENE or KLING_SKILL_REQUEST_TEMPLATE.");
@@ -190,13 +190,14 @@ async function pollKlingSkillTask(baseUrl: string, taskId: string, authorization
   throw new Error("Kling Skill task timed out");
 }
 
-async function resolvePublicFrameUrl(filePath: string): Promise<string> {
+async function resolvePublicFrameUrl(filePath: string, jobId: string): Promise<string> {
   if (process.env.PUBLIC_ASSET_BASE_URL) {
-    return `${process.env.PUBLIC_ASSET_BASE_URL.replace(/\/$/, "")}/${path.basename(filePath)}`;
+    const base = process.env.PUBLIC_ASSET_BASE_URL.replace(/\/$/, "");
+    return `${base}/api/jobs/${jobId}/assets/${path.basename(filePath)}`;
   }
 
   throw new Error(
-    "Kling Skill needs public frame URLs. Set PUBLIC_ASSET_BASE_URL or replace resolvePublicFrameUrl with your storage uploader."
+    "Kling Skill needs public frame URLs. Set PUBLIC_ASSET_BASE_URL to your app's public base URL (e.g. https://your-tunnel.ngrok.io)."
   );
 }
 

@@ -1,4 +1,4 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createPlaceholderClip } from "../video/ffmpeg";
 import { buildKlingAuthorization } from "./klingAuth";
@@ -35,27 +35,26 @@ export async function generateKlingClip(input: GenerateKlingClipInput): Promise<
     return generateKlingSkillClip(input, authorization);
   }
 
-  const firstFrameUrl = await uploadFrameForKling(input.firstFramePath);
-  const lastFrameUrl = await uploadFrameForKling(input.lastFramePath);
+  const imageBase64 = await readFrameAsBase64(input.firstFramePath);
+  const imageTailBase64 = await readFrameAsBase64(input.lastFramePath);
   const baseUrl = process.env.KLING_API_BASE_URL.replace(/\/$/, "");
+
   const createResponse = await fetch(`${baseUrl}/v1/videos/image2video`, {
     method: "POST",
+    signal: AbortSignal.timeout(120_000),
     headers: {
       Authorization: authorization,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.KLING_MODEL ?? "video-3.0-omni",
+      model_name: process.env.KLING_MODEL ?? "kling-v3",
       prompt: input.prompt,
-      duration: Number(process.env.KLING_DURATION_SECONDS ?? input.clipSeconds),
+      duration: String(process.env.KLING_DURATION_SECONDS ?? input.clipSeconds),
       aspect_ratio: input.aspectRatio,
-      resolution: process.env.KLING_RESOLUTION ?? "1080p",
-      native_audio: parseBooleanEnv(process.env.KLING_NATIVE_AUDIO, true),
-      audio_sync: parseBooleanEnv(process.env.KLING_AUDIO_SYNC, true),
-      mode: process.env.KLING_MODE ?? "professional",
-      image: firstFrameUrl,
-      first_frame: firstFrameUrl,
-      last_frame: lastFrameUrl,
+      mode: process.env.KLING_MODE ?? "pro",
+      sound: process.env.KLING_SOUND ?? "on",
+      image: imageBase64,
+      image_tail: imageTailBase64,
       negative_prompt:
         "jitter, flicker, warped furniture, distorted architecture, people, logos, text, melting objects"
     })
@@ -65,8 +64,12 @@ export async function generateKlingClip(input: GenerateKlingClipInput): Promise<
     throw new Error(`Kling task creation failed: ${await createResponse.text()}`);
   }
 
-  const created = (await createResponse.json()) as { task_id?: string; id?: string };
-  const taskId = created.task_id ?? created.id;
+  const created = (await createResponse.json()) as {
+    data?: { task_id?: string };
+    task_id?: string;
+    id?: string;
+  };
+  const taskId = created.data?.task_id ?? created.task_id ?? created.id;
   if (!taskId) {
     throw new Error("Kling did not return a task id");
   }
@@ -77,7 +80,7 @@ export async function generateKlingClip(input: GenerateKlingClipInput): Promise<
     throw new Error(`Kling video download failed: ${videoResponse.status}`);
   }
 
-  await copyFileLike(videoResponse, input.outputPath);
+  await writeFile(input.outputPath, Buffer.from(await videoResponse.arrayBuffer()));
   return input.outputPath;
 }
 
@@ -86,25 +89,35 @@ async function pollKlingTask(baseUrl: string, taskId: string, authorization: str
   const intervalMs = Number(process.env.KLING_POLL_INTERVAL_MS ?? 5000);
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await fetch(`${baseUrl}/v1/videos/${taskId}`, {
+    const response = await fetch(`${baseUrl}/v1/videos/image2video/${taskId}`, {
+      signal: AbortSignal.timeout(30_000),
       headers: { Authorization: authorization }
     });
     if (!response.ok) {
       throw new Error(`Kling status failed: ${await response.text()}`);
     }
+
     const payload = (await response.json()) as {
+      data?: {
+        task_status?: string;
+        task_status_msg?: string;
+        task_result?: { videos?: Array<{ url?: string }> };
+      };
       status?: string;
       video_url?: string;
-      output?: { video_url?: string; url?: string };
-      result?: { video_url?: string; url?: string };
       error?: string;
     };
 
-    if (payload.status === "failed") {
-      throw new Error(payload.error ?? "Kling task failed");
+    const status = payload.data?.task_status ?? payload.status;
+    if (status === "failed") {
+      throw new Error(payload.data?.task_status_msg ?? payload.error ?? "Kling task failed");
     }
 
-    const videoUrl = payload.video_url ?? payload.output?.video_url ?? payload.output?.url ?? payload.result?.video_url ?? payload.result?.url;
+    // Official response: data.task_result.videos[0].url
+    const videoUrl =
+      payload.data?.task_result?.videos?.[0]?.url ??
+      payload.video_url;
+
     if (videoUrl) {
       return videoUrl;
     }
@@ -115,19 +128,9 @@ async function pollKlingTask(baseUrl: string, taskId: string, authorization: str
   throw new Error("Kling task timed out");
 }
 
-async function uploadFrameForKling(filePath: string): Promise<string> {
-  if (process.env.PUBLIC_ASSET_BASE_URL) {
-    return `${process.env.PUBLIC_ASSET_BASE_URL.replace(/\/$/, "")}/${path.basename(filePath)}`;
-  }
-
-  throw new Error(
-    "Kling needs public frame URLs. Set PUBLIC_ASSET_BASE_URL or replace uploadFrameForKling with your storage uploader."
-  );
-}
-
-async function copyFileLike(response: Response, outputPath: string): Promise<void> {
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await import("node:fs/promises").then((fs) => fs.writeFile(outputPath, buffer));
+async function readFrameAsBase64(filePath: string): Promise<string> {
+  const data = await readFile(filePath);
+  return data.toString("base64");
 }
 
 function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {

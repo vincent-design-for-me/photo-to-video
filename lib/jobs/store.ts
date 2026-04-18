@@ -16,10 +16,27 @@ export async function ensureJobDirs(jobId: string): Promise<string> {
   return rootDir;
 }
 
-export async function createJob(files: JobAsset[], id = randomUUID(), styleId = DEFAULT_WORKFLOW_CONFIG.styleId): Promise<VideoJob> {
+function computeOutputDimensions(aspectRatio: string, resolution: string): { outputWidth: number; outputHeight: number } {
+  const px = resolution === "4k" ? 2160 : resolution === "720p" ? 720 : 1080;
+  if (aspectRatio === "16:9") return { outputWidth: Math.round(px * 16 / 9), outputHeight: px };
+  if (aspectRatio === "1:1")  return { outputWidth: px, outputHeight: px };
+  if (aspectRatio === "4:3")  return { outputWidth: Math.round(px * 4 / 3), outputHeight: px };
+  if (aspectRatio === "3:4")  return { outputWidth: px, outputHeight: Math.round(px * 4 / 3) };
+  // default 9:16 vertical
+  return { outputWidth: px, outputHeight: Math.round(px * 16 / 9) };
+}
+
+export async function createJob(
+  files: JobAsset[],
+  id = randomUUID(),
+  styleId = DEFAULT_WORKFLOW_CONFIG.styleId,
+  aspectRatio = DEFAULT_WORKFLOW_CONFIG.aspectRatio,
+  resolution = DEFAULT_WORKFLOW_CONFIG.resolution
+): Promise<VideoJob> {
   const rootDir = await ensureJobDirs(id);
   const now = new Date().toISOString();
   const style = getInteriorStylePrompt(styleId);
+  const { outputWidth, outputHeight } = computeOutputDimensions(aspectRatio, resolution);
   const job: VideoJob = {
     id,
     rootDir,
@@ -32,7 +49,11 @@ export async function createJob(files: JobAsset[], id = randomUUID(), styleId = 
     config: {
       ...DEFAULT_WORKFLOW_CONFIG,
       styleId: style.id,
-      style: style.name
+      style: style.name,
+      aspectRatio,
+      resolution,
+      outputWidth,
+      outputHeight
     },
     steps: [
       ...files.map((file, index) => ({
@@ -56,13 +77,13 @@ export async function createJob(files: JobAsset[], id = randomUUID(), styleId = 
         label: `Kling clip ${index + 1}: ${file.name}`,
         status: "queued" as const
       })),
-      {
+      ...(files.length > 1 ? [{
         id: "render-0",
-        kind: "render",
+        kind: "render" as const,
         index: 0,
         label: "FFmpeg final timeline",
-        status: "queued"
-      }
+        status: "queued" as const
+      }] : [])
     ]
   };
 

@@ -8,6 +8,8 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const files = formData.getAll("images").filter((value): value is File => value instanceof File);
   const styleId = stringValue(formData.get("styleId"));
+  const aspectRatio = stringValue(formData.get("aspectRatio"));
+  const resolution = stringValue(formData.get("resolution"));
 
   if (files.length === 0) {
     return new NextResponse("Upload at least one image", { status: 400 });
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
     assets.push(await buildJobAsset(outputPath, file.name || safeName, file.type || "image/jpeg"));
   }
 
-  const job = await createJob(assets, jobId, styleId);
+  const job = await createJob(assets, jobId, styleId, aspectRatio, resolution);
   return NextResponse.json({ id: job.id, status: job.status });
 }
 

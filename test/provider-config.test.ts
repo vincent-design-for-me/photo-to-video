@@ -11,7 +11,7 @@ test("Gemini-compatible base URL is converted to generateContent endpoint", () =
   );
 });
 
-test("image generation config accepts IMAGE_* aliases from the other project", () => {
+test("image generation config reads IMAGE_* env vars", () => {
   assert.deepEqual(
     getImageGenerationConfig({
       IMAGE_BASE_URL: "https://www.xinroute.com",

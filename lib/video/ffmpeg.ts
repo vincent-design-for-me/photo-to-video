@@ -74,7 +74,8 @@ export async function renderFinalVideo(input: RenderFinalVideoInput): Promise<st
         ].join(","),
         "-r",
         "30",
-        "-an",
+        "-c:a",
+        "aac",
         output
       ]);
       return output;
