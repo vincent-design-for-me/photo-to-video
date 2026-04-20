@@ -10,6 +10,16 @@ export async function POST(request: Request) {
   const styleId = stringValue(formData.get("styleId"));
   const aspectRatio = stringValue(formData.get("aspectRatio"));
   const resolution = stringValue(formData.get("resolution"));
+  const editRequestsRaw = stringValue(formData.get("editRequests"));
+  let userEditRequests: string[] | undefined;
+  if (editRequestsRaw) {
+    try {
+      const parsed: unknown = JSON.parse(editRequestsRaw);
+      if (Array.isArray(parsed) && parsed.every(v => typeof v === "string")) {
+        userEditRequests = (parsed as string[]).map(v => v.trim()).slice(0, files.length);
+      }
+    } catch { /* treat as no edits */ }
+  }
 
   if (files.length === 0) {
     return new NextResponse("Upload at least one image", { status: 400 });
@@ -33,7 +43,7 @@ export async function POST(request: Request) {
     assets.push(await buildJobAsset(outputPath, file.name || safeName, file.type || "image/jpeg"));
   }
 
-  const job = await createJob(assets, jobId, styleId, aspectRatio, resolution);
+  const job = await createJob(assets, jobId, styleId, aspectRatio, resolution, userEditRequests);
   return NextResponse.json({ id: job.id, status: job.status });
 }
 

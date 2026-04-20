@@ -31,12 +31,18 @@ export async function createJob(
   id = randomUUID(),
   styleId = DEFAULT_WORKFLOW_CONFIG.styleId,
   aspectRatio = DEFAULT_WORKFLOW_CONFIG.aspectRatio,
-  resolution = DEFAULT_WORKFLOW_CONFIG.resolution
+  resolution = DEFAULT_WORKFLOW_CONFIG.resolution,
+  userEditRequests?: string[]
 ): Promise<VideoJob> {
   const rootDir = await ensureJobDirs(id);
   const now = new Date().toISOString();
   const style = getInteriorStylePrompt(styleId);
   const { outputWidth, outputHeight } = computeOutputDimensions(aspectRatio, resolution);
+  const normalizedEditRequests = userEditRequests
+    ? files.map((_, i) => (userEditRequests[i] ?? "").trim())
+    : undefined;
+  const hasAnyEdit = normalizedEditRequests?.some(r => r.length > 0);
+
   const job: VideoJob = {
     id,
     rootDir,
@@ -45,6 +51,7 @@ export async function createJob(
     updatedAt: now,
     sourceImages: files,
     generatedFrames: [],
+    ...(hasAnyEdit ? { userEditRequests: normalizedEditRequests } : {}),
     generatedClips: [],
     config: {
       ...DEFAULT_WORKFLOW_CONFIG,

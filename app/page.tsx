@@ -84,6 +84,7 @@ export default function HomePage() {
   const [selectedResolution, setSelectedResolution] = useState("1080p");
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [editRequests, setEditRequests] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const uploadRef = useRef<HTMLElement>(null);
@@ -128,6 +129,7 @@ export default function HomePage() {
     const nextFiles = [...files, ...toAdd];
     setFiles(nextFiles);
     setPreviewUrls([...previewUrls, ...newUrls]);
+    setEditRequests([...editRequests, ...toAdd.map(() => "")]);
     readImageDimensions(nextFiles[0]).then(({ width, height }) => {
       const ratio = detectAspectRatio(width, height);
       setDetectedRatio(ratio);
@@ -139,6 +141,7 @@ export default function HomePage() {
     URL.revokeObjectURL(previewUrls[index]);
     setFiles(files.filter((_, i) => i !== index));
     setPreviewUrls(previewUrls.filter((_, i) => i !== index));
+    setEditRequests(editRequests.filter((_, i) => i !== index));
   }
 
   function onBrowseClick() {
@@ -184,6 +187,10 @@ export default function HomePage() {
     fd.append("aspectRatio", selectedRatio);
     fd.append("styleId", selectedStyle);
     fd.append("resolution", selectedResolution);
+    const trimmedEdits = editRequests.map(s => s.trim());
+    if (trimmedEdits.some(s => s.length > 0)) {
+      fd.append("editRequests", JSON.stringify(trimmedEdits));
+    }
 
     try {
       const createResponse = await fetch("/api/jobs", { method: "POST", body: fd });
@@ -286,6 +293,18 @@ export default function HomePage() {
                       >
                         ×
                       </button>
+                      <textarea
+                        className="thumb-edit"
+                        placeholder="Optional: changes for this photo…"
+                        maxLength={500}
+                        value={editRequests[i] ?? ""}
+                        onChange={e => {
+                          const next = [...editRequests];
+                          next[i] = e.target.value;
+                          setEditRequests(next);
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      />
                     </div>
                   ))}
                   {files.length < 6 && (

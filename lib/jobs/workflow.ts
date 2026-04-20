@@ -50,9 +50,11 @@ export async function runImagePhase(jobId: string): Promise<void> {
     for (const [index, image] of job.sourceImages.entries()) {
       await updateJobStep(jobId, "prompt", index, "running");
       const stylePrompt = buildImagePromptForStyle(styleId);
+      const userRequest = job.userEditRequests?.[index];
       const framePrompt = await generateNanoBananaPromptForImage({
         sourceImagePath: image.path,
-        stylePrompt
+        stylePrompt,
+        userRequest
       });
       framePrompts.push(framePrompt);
       await updateJobStep(jobId, "prompt", index, "complete");

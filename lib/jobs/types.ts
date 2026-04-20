@@ -30,6 +30,7 @@ export type VideoJob = {
   sourceImages: JobAsset[];
   generatedFrames: string[];
   framePrompts?: string[];
+  userEditRequests?: string[];
   generatedClips: string[];
   finalVideoPath?: string;
   error?: string;

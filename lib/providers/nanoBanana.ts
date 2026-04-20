@@ -109,6 +109,7 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
 type GenerateNanoBananaPromptInput = {
   sourceImagePath: string;
   stylePrompt: string;
+  userRequest?: string;
 };
 
 export async function generateNanoBananaPromptForImage(input: GenerateNanoBananaPromptInput): Promise<string> {
@@ -119,7 +120,13 @@ export async function generateNanoBananaPromptForImage(input: GenerateNanoBanana
   const llm = getLLMConfig();
 
   if (llm) {
-    // Use OpenAI-compatible LLM API for text prompt generation
+    const userRequestPart = input.userRequest?.trim()
+      ? [{
+          type: "text" as const,
+          text: `Additional user edit request for this specific photo (integrate this into the Nano Banana Prompt while keeping the style intent):\n${input.userRequest.trim()}`
+        }]
+      : [];
+
     const response = await fetch(`${llm.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -133,6 +140,7 @@ export async function generateNanoBananaPromptForImage(input: GenerateNanoBanana
             role: "user",
             content: [
               { type: "text", text: input.stylePrompt },
+              ...userRequestPart,
               {
                 type: "image_url",
                 image_url: { url: `data:${mimeType};base64,${base64Data}` }
@@ -153,7 +161,10 @@ export async function generateNanoBananaPromptForImage(input: GenerateNanoBanana
     return extractNanoBananaPrompt(rawText);
   }
 
-  // Fallback: no LLM configured, return the style prompt as-is
+  // Fallback: no LLM configured, append user request if provided
+  if (input.userRequest?.trim()) {
+    return `${input.stylePrompt}\n\nAdditional: ${input.userRequest.trim()}`;
+  }
   return input.stylePrompt;
 }
 

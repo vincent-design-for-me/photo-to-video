@@ -1,0 +1,2 @@
+file '/Users/vincentzhangm2max/Downloads/Photo-to-Video/work/normalized-0.mp4'
+file '/Users/vincentzhangm2max/Downloads/Photo-to-Video/work/normalized-1.mp4'
