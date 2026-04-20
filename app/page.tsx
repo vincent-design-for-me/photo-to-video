@@ -219,6 +219,11 @@ export default function HomePage() {
       <div className="bg-video-overlay" aria-hidden="true" />
       <div id="mouse-particles" aria-hidden="true" />
 
+      <div className="header-cover" aria-hidden="true">
+        <video src="/bg.mp4" autoPlay muted loop playsInline />
+        <div className="header-cover-overlay" />
+      </div>
+
       <header className="site-header">
         <a className="logo" href="/">Photo → Video</a>
         <nav className="nav-pill" aria-label="Site navigation">
