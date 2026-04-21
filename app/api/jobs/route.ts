@@ -3,6 +3,8 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { buildJobAsset, createJob, ensureJobDirs } from "../../../lib/jobs/store";
+import { isSupabaseMode } from "../../../lib/supabase";
+import { uploadBufferToStorage, storageKey } from "../../../lib/jobs/storage";
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -21,13 +23,8 @@ export async function POST(request: Request) {
     } catch { /* treat as no edits */ }
   }
 
-  if (files.length === 0) {
-    return new NextResponse("Upload at least one image", { status: 400 });
-  }
-
-  if (files.length > 6) {
-    return new NextResponse("Upload a maximum of 6 images", { status: 400 });
-  }
+  if (files.length === 0) return new NextResponse("Upload at least one image", { status: 400 });
+  if (files.length > 6) return new NextResponse("Upload a maximum of 6 images", { status: 400 });
 
   const jobId = randomUUID();
   const rootDir = await ensureJobDirs(jobId);
@@ -38,9 +35,18 @@ export async function POST(request: Request) {
   for (const [index, file] of files.entries()) {
     const extension = extensionFor(file.name, file.type);
     const safeName = `source-${index + 1}${extension}`;
-    const outputPath = path.join(sourceDir, safeName);
-    await writeFile(outputPath, Buffer.from(await file.arrayBuffer()));
-    assets.push(await buildJobAsset(outputPath, file.name || safeName, file.type || "image/jpeg"));
+    const contentType = file.type || "image/jpeg";
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (isSupabaseMode()) {
+      const key = storageKey(jobId, `source/${safeName}`);
+      await uploadBufferToStorage(key, buffer, contentType);
+      assets.push(await buildJobAsset(key, file.name || safeName, contentType, buffer.byteLength));
+    } else {
+      const outputPath = path.join(sourceDir, safeName);
+      await writeFile(outputPath, buffer);
+      assets.push(await buildJobAsset(outputPath, file.name || safeName, contentType));
+    }
   }
 
   const job = await createJob(assets, jobId, styleId, aspectRatio, resolution, userEditRequests);
