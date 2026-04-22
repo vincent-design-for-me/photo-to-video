@@ -100,3 +100,12 @@ test("isSupabaseServiceRoleConfigured requires a real service_role JWT", () => {
   assert.equal(isSupabaseServiceRoleConfigured(env), true);
   assert.equal(isSupabaseServiceRoleConfigured(badEnv), false);
 });
+
+test("isSupabaseServiceRoleConfigured accepts process.env-style optional keys", () => {
+  const env: NodeJS.ProcessEnv = {
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature"
+  };
+
+  assert.equal(isSupabaseServiceRoleConfigured(env), true);
+});
