@@ -22,6 +22,14 @@ const STYLE_OPTIONS = INTERIOR_STYLE_PROMPTS.map(s => ({ value: s.id, label: s.n
 
 const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
+const COUNT_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten",
+  "eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen","twenty"];
+
+function photoCountLabel(n: number): string {
+  const word = n <= 20 ? COUNT_WORDS[n] : String(n);
+  return `${word} ${n === 1 ? "photo" : "photos"}`;
+}
+
 function detectAspectRatio(width: number, height: number): string {
   if (width > height) return "16:9";
   if (height > width) return "3:4";
@@ -90,6 +98,7 @@ export default function HomePage() {
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [editRequests, setEditRequests] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const uploadRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,12 +153,31 @@ export default function HomePage() {
     return () => window.removeEventListener("mousemove", onMouseMove);
   }, []);
 
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setLightboxIndex(null);
+      } else if (e.key === "ArrowRight") {
+        setLightboxIndex(i => (i === null ? null : Math.min(i + 1, previewUrls.length - 1)));
+      } else if (e.key === "ArrowLeft") {
+        setLightboxIndex(i => (i === null ? null : Math.max(i - 1, 0)));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightboxIndex, previewUrls.length]);
+
   function acceptFiles(incoming: File[]) {
     const valid = incoming.filter(f => ACCEPTED_TYPES.has(f.type));
     if (valid.length === 0) return;
-    const space = 6 - files.length;
-    if (space <= 0) return;
-    const toAdd = valid.slice(0, space);
+    const toAdd = valid;
     const newUrls = toAdd.map(f => URL.createObjectURL(f));
     const nextFiles = [...files, ...toAdd];
     setFiles(nextFiles);
@@ -164,9 +192,15 @@ export default function HomePage() {
 
   function removeFile(index: number) {
     URL.revokeObjectURL(previewUrls[index]);
+    const nextLength = files.length - 1;
     setFiles(files.filter((_, i) => i !== index));
     setPreviewUrls(previewUrls.filter((_, i) => i !== index));
     setEditRequests(editRequests.filter((_, i) => i !== index));
+    if (lightboxIndex !== null) {
+      if (nextLength === 0) setLightboxIndex(null);
+      else if (index === lightboxIndex) setLightboxIndex(Math.min(lightboxIndex, nextLength - 1));
+      else if (index < lightboxIndex) setLightboxIndex(lightboxIndex - 1);
+    }
   }
 
   function onBrowseClick() {
@@ -290,10 +324,10 @@ export default function HomePage() {
         >
           <div className="upload-head">
             <h2>Upload Room Photos</h2>
-            <span className="fineprint">Up to X images</span>
+            <span className="fineprint" />
           </div>
           <div
-            className={`dropzone${isDragging ? " is-dragging" : ""}`}
+            className={`dropzone${isDragging ? " is-dragging" : ""}${files.length > 0 ? " has-files" : ""}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
@@ -306,7 +340,7 @@ export default function HomePage() {
                   <path d="m16 16-4-4-4 4" />
                 </svg>
                 <h3>Choose files or drag &amp; drop them here</h3>
-                <p className="formats">JPEG, PNG, WebP · up to X photos</p>
+                <p className="formats">JPEG, PNG, WebP</p>
                 <button type="button" className="browse-btn" onClick={onBrowseClick}>
                   Browse Files
                 </button>
@@ -316,15 +350,31 @@ export default function HomePage() {
                 <div className="thumb-strip">
                   {files.map((f, i) => (
                     <div key={i} className="thumb">
-                      <img src={previewUrls[i]} alt={f.name} />
-                      <button
-                        type="button"
-                        className="thumb-remove"
-                        onClick={() => removeFile(i)}
-                        aria-label={`Remove ${f.name}`}
-                      >
-                        ×
-                      </button>
+                      <div className="thumb-image-wrap">
+                        <img src={previewUrls[i]} alt={f.name} />
+                        <button
+                          type="button"
+                          className="thumb-remove"
+                          onClick={() => removeFile(i)}
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          ×
+                        </button>
+                        <button
+                          type="button"
+                          className="thumb-zoom"
+                          onClick={() => setLightboxIndex(i)}
+                          aria-label={`View ${f.name}`}
+                          title="View larger"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" />
+                            <path d="M11 8v6" />
+                            <path d="M8 11h6" />
+                          </svg>
+                        </button>
+                      </div>
                       <textarea
                         className="thumb-edit"
                         placeholder="Optional: changes for this photo…"
@@ -339,19 +389,17 @@ export default function HomePage() {
                       />
                     </div>
                   ))}
-                  {files.length < 6 && (
-                    <button
-                      type="button"
-                      className="thumb-add"
-                      onClick={onBrowseClick}
-                      aria-label="Add more photos"
-                    >
-                      +
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="thumb-add"
+                    onClick={onBrowseClick}
+                    aria-label="Add more photos"
+                  >
+                    +
+                  </button>
                 </div>
                 <p className="fineprint" style={{ marginTop: "12px", textAlign: "center" }}>
-                  {files.length} of 6 photos · drag more here or click +
+                  {photoCountLabel(files.length)} · drag more here or click +
                 </p>
               </div>
             )}
@@ -400,6 +448,60 @@ export default function HomePage() {
         </form>
         </div>
       </main>
+
+      {lightboxIndex !== null && previewUrls[lightboxIndex] && (
+        <div
+          className="lightbox-backdrop"
+          onClick={() => setLightboxIndex(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Enlarged view of photo ${lightboxIndex + 1}`}
+        >
+          <button
+            type="button"
+            className="lightbox-close"
+            aria-label="Close enlarged view"
+            onClick={e => { e.stopPropagation(); setLightboxIndex(null); }}
+          >
+            ×
+          </button>
+          {previewUrls.length > 1 && (
+            <button
+              type="button"
+              className="lightbox-nav prev"
+              disabled={lightboxIndex === 0}
+              aria-label="Previous image"
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i === null ? null : Math.max(i - 1, 0))); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </button>
+          )}
+          <img
+            className="lightbox-img"
+            src={previewUrls[lightboxIndex]}
+            alt={files[lightboxIndex]?.name ?? `Photo ${lightboxIndex + 1}`}
+            onClick={e => e.stopPropagation()}
+          />
+          {previewUrls.length > 1 && (
+            <button
+              type="button"
+              className="lightbox-nav next"
+              disabled={lightboxIndex === previewUrls.length - 1}
+              aria-label="Next image"
+              onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i === null ? null : Math.min(i + 1, previewUrls.length - 1))); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
+          )}
+          {previewUrls.length > 1 && (
+            <div className="lightbox-counter">{lightboxIndex + 1} / {previewUrls.length}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

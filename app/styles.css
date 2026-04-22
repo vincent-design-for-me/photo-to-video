@@ -640,7 +640,7 @@ a {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 28px;
-  padding: 32px;
+  padding: 20px 24px 24px;
   box-shadow:
     0 2px 0 0 rgba(255, 255, 255, 0.18) inset,
     0 -1px 0 0 rgba(255, 255, 255, 0.06) inset,
@@ -673,7 +673,7 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .upload-head h2 {
@@ -691,10 +691,14 @@ a {
 .dropzone {
   border: 1px dashed rgba(255, 255, 255, 0.2);
   border-radius: 18px;
-  padding: 48px 24px;
+  padding: 24px 16px;
   text-align: center;
   transition: border-color 160ms, background 160ms;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.dropzone.has-files {
+  padding: 20px 14px;
 }
 
 .dropzone.is-dragging {
@@ -708,6 +712,7 @@ a {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  padding: 24px 8px;
 }
 
 .cloud-icon {
@@ -750,33 +755,42 @@ a {
 /* Thumbnail strip (shown after files are added) */
 
 .thumb-strip-wrap {
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
 .thumb-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
+  gap: 14px;
+  justify-content: flex-start;
 }
 
 .thumb {
-  width: 120px;
-  border-radius: 8px;
+  width: 180px;
+  border-radius: 12px;
   overflow: visible;
   position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+}
+
+.thumb-image-wrap {
+  position: relative;
+  width: 180px;
+  height: 144px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .thumb img {
-  width: 120px;
-  height: 96px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
-  border-radius: 8px;
+  border-radius: 12px;
   flex-shrink: 0;
 }
 
@@ -784,16 +798,16 @@ a {
   width: 100%;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text, #e5e7eb);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
-  padding: 6px 8px;
+  padding: 8px 10px;
   resize: none;
   outline: none;
   transition: border-color 140ms;
   box-sizing: border-box;
-  min-height: 44px;
+  min-height: 50px;
   font-family: inherit;
 }
 
@@ -802,16 +816,16 @@ a {
 }
 
 .thumb-edit::placeholder {
-  color: rgba(255, 255, 255, 0.28);
-  font-size: 10px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 11px;
 }
 
 .thumb-remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: rgba(18, 22, 21, 0.72);
   color: #fff;
@@ -824,31 +838,121 @@ a {
   line-height: 1;
   padding: 0;
   transition: background 120ms;
+  z-index: 2;
 }
 
 .thumb-remove:hover {
   background: rgba(18, 22, 21, 0.95);
 }
 
-.thumb-add {
-  width: 120px;
-  height: 96px;
+.thumb-zoom {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
+  background: rgba(18, 22, 21, 0.78);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 140ms ease, transform 140ms ease, background 120ms;
+  z-index: 2;
+}
+
+.thumb-zoom:hover {
+  background: rgba(18, 22, 21, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.thumb-zoom svg {
+  width: 15px;
+  height: 15px;
+}
+
+.thumb-image-wrap:hover .thumb-zoom,
+.thumb-zoom:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.thumb-add {
+  width: 180px;
+  height: 144px;
+  border-radius: 12px;
   border: 1.5px dashed #c0cac7;
   background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 34px;
   color: var(--muted);
   transition: border-color 140ms, color 140ms;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .thumb-add:hover {
   border-color: var(--ink);
   color: var(--ink);
+}
+
+/* Lightbox nav buttons (shared lightbox-backdrop/img/close/caption come from the job-page styles) */
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 140ms, border-color 140ms, transform 140ms;
+}
+
+.lightbox-nav:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.55);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.lightbox-nav.prev { left: 20px; }
+.lightbox-nav.next { right: 20px; }
+
+.lightbox-nav svg { width: 22px; height: 22px; }
+
+.lightbox-nav[disabled] {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.lightbox-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* Controls reveal wrapper */
