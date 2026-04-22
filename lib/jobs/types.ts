@@ -23,6 +23,7 @@ export type JobStep = {
 
 export type VideoJob = {
   id: string;
+  userId?: string;
   status: JobStatus;
   rootDir: string;
   createdAt: string;

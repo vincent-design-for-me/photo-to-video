@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { buildLoginHref } from "@/lib/auth/paths";
+import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_INTERIOR_STYLE_ID, INTERIOR_STYLE_PROMPTS } from "../lib/prompts/interiorStyles";
 
 const ASPECT_RATIO_OPTIONS = [
@@ -76,8 +78,10 @@ function ControlRow({
 
 export default function HomePage() {
   const router = useRouter();
+  const supabaseRef = useRef(createClient());
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [detectedRatio, setDetectedRatio] = useState<string | null>(null);
   const [selectedRatio, setSelectedRatio] = useState("3:4");
   const [selectedStyle, setSelectedStyle] = useState<string>(DEFAULT_INTERIOR_STYLE_ID);
@@ -89,6 +93,27 @@ export default function HomePage() {
 
   const uploadRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    supabaseRef.current.auth.getUser().then(({ data }) => {
+      if (active) {
+        setIsAuthenticated(Boolean(data.user));
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabaseRef.current.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(Boolean(session?.user));
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const particlesEl = document.getElementById("mouse-particles");
@@ -172,13 +197,20 @@ export default function HomePage() {
     acceptFiles(Array.from(e.dataTransfer.files));
   }
 
-  function scrollToUpload() {
-    uploadRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (files.length === 0) return;
+
+    const {
+      data: { user },
+    } = await supabaseRef.current.auth.getUser();
+
+    if (!user) {
+      setMessage("Sign in to create a video job.");
+      router.push(buildLoginHref("/"));
+      return;
+    }
+
     setBusy(true);
     setMessage("Creating the job...");
 
@@ -194,10 +226,21 @@ export default function HomePage() {
 
     try {
       const createResponse = await fetch("/api/jobs", { method: "POST", body: fd });
+      if (createResponse.status === 401 || createResponse.status === 403) {
+        setMessage("Your session expired. Please sign in again.");
+        setBusy(false);
+        router.push(buildLoginHref("/"));
+        return;
+      }
       if (!createResponse.ok) throw new Error(await createResponse.text());
       const job = (await createResponse.json()) as { id: string };
       setMessage("Starting Nano Banana and Kling workflow...");
-      await fetch(`/api/jobs/${job.id}/run`, { method: "POST" });
+      const runResponse = await fetch(`/api/jobs/${job.id}/run`, { method: "POST" });
+      if (!runResponse.ok) {
+        const runError = await runResponse.text();
+        router.push(`/jobs/${job.id}?runError=${encodeURIComponent(runError)}`);
+        return;
+      }
       router.push(`/jobs/${job.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create job");
@@ -219,23 +262,7 @@ export default function HomePage() {
       <div className="bg-video-overlay" aria-hidden="true" />
       <div id="mouse-particles" aria-hidden="true" />
 
-      <div className="header-cover" aria-hidden="true">
-        <video src="/bg.mp4" autoPlay muted loop playsInline />
-        <div className="header-cover-overlay" />
-      </div>
-
-      <header className="site-header">
-        <a className="logo" href="/">Photo → Video</a>
-        <nav className="nav-pill" aria-label="Site navigation">
-          <a href="/" aria-current="page">Home</a>
-          <a href="#cases">Cases</a>
-        </nav>
-        <button type="button" className="cta-dark" onClick={scrollToUpload}>
-          Create Now →
-        </button>
-      </header>
-
-      <main className="hero-main">
+      <main className="hero-main page-enter">
         <section className="hero">
           <span className="badge">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -364,9 +391,9 @@ export default function HomePage() {
             <button
               className="primary"
               type="submit"
-              disabled={busy || files.length === 0}
+              disabled={busy || files.length === 0 || isAuthenticated === null}
             >
-              {busy ? "Creating…" : "Generate Video →"}
+              {busy ? "Creating…" : isAuthenticated === false ? "Sign In to Generate →" : "Generate Video →"}
             </button>
             {message && <span className="status">{message}</span>}
           </div>

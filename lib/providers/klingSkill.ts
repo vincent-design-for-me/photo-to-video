@@ -1,5 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getStorageObjectKeyForWorkflowFile } from "../jobs/publicAsset";
+import { getSignedUrl } from "../jobs/storage";
+import { isSupabaseMode } from "../supabase";
 import { createPlaceholderClip } from "../video/ffmpeg";
 
 type GenerateKlingSkillClipInput = {
@@ -191,6 +194,13 @@ async function pollKlingSkillTask(baseUrl: string, taskId: string, authorization
 }
 
 async function resolvePublicFrameUrl(filePath: string, jobId: string): Promise<string> {
+  if (isSupabaseMode()) {
+    const storageKey = getStorageObjectKeyForWorkflowFile(jobId, filePath);
+    if (storageKey) {
+      return getSignedUrl(storageKey);
+    }
+  }
+
   if (process.env.PUBLIC_ASSET_BASE_URL) {
     const base = process.env.PUBLIC_ASSET_BASE_URL.replace(/\/$/, "");
     return `${base}/api/jobs/${jobId}/assets/${path.basename(filePath)}`;

@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_WORKFLOW_CONFIG } from "./config";
 import { getInteriorStylePrompt } from "../prompts/interiorStyles";
 import { getSupabaseClient } from "../supabase";
@@ -32,7 +33,9 @@ export async function createJob(
   styleId = DEFAULT_WORKFLOW_CONFIG.styleId,
   aspectRatio = DEFAULT_WORKFLOW_CONFIG.aspectRatio,
   resolution = DEFAULT_WORKFLOW_CONFIG.resolution,
-  userEditRequests?: string[]
+  userEditRequests?: string[],
+  userId?: string,
+  client?: SupabaseClient
 ): Promise<VideoJob> {
   const rootDir = await ensureJobDirs(id);
   const now = new Date().toISOString();
@@ -45,6 +48,7 @@ export async function createJob(
 
   const job: VideoJob = {
     id,
+    ...(userId ? { userId } : {}),
     rootDir,
     status: "queued",
     createdAt: now,
@@ -94,7 +98,7 @@ export async function createJob(
     ]
   };
 
-  await writeJob(job);
+  await writeJob(job, client);
   return job;
 }
 
@@ -109,8 +113,12 @@ export async function getJob(jobId: string): Promise<VideoJob | null> {
   return rowToJob(data);
 }
 
-export async function writeJob(job: VideoJob): Promise<void> {
-  const supabase = getSupabaseClient();
+function clientOrDefault(client?: SupabaseClient) {
+  return client ?? getSupabaseClient();
+}
+
+export async function writeJob(job: VideoJob, client?: SupabaseClient): Promise<void> {
+  const supabase = clientOrDefault(client);
   const { error } = await supabase.from("jobs").upsert(jobToRow(job));
   if (error) throw new Error(`Failed to write job: ${error.message}`);
 }
@@ -144,6 +152,7 @@ export async function buildJobAsset(filePath: string, name: string, type: string
 function jobToRow(job: VideoJob) {
   return {
     id: job.id,
+    user_id: job.userId ?? null,
     status: job.status,
     created_at: job.createdAt,
     updated_at: job.updatedAt,
@@ -162,6 +171,7 @@ function jobToRow(job: VideoJob) {
 function rowToJob(row: Record<string, unknown>): VideoJob {
   return {
     id: row.id as string,
+    userId: row.user_id as string | undefined,
     rootDir: path.join(TMP_DIR, row.id as string),
     status: row.status as VideoJob["status"],
     createdAt: row.created_at as string,
@@ -176,4 +186,15 @@ function rowToJob(row: Record<string, unknown>): VideoJob {
     error: row.error as string | undefined,
     steps: (row.steps as VideoJob["steps"]) ?? [],
   };
+}
+
+export async function getJobsByUser(userId: string): Promise<VideoJob[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(rowToJob);
 }

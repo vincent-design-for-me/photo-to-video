@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getJob } from "../../../../lib/jobs/store";
+import { requireOwnedJob } from "../../../../lib/jobs/ownership";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const job = await getJob(id);
-  if (!job) {
-    return new NextResponse("Job not found", { status: 404 });
+  const result = await requireOwnedJob(id);
+  if (result.response) {
+    return result.response;
   }
-  return NextResponse.json(sanitizeJob(job));
+  return NextResponse.json(sanitizeJob(result.job));
 }
 
 function sanitizeJob<T extends { rootDir?: string }>(job: T): T {

@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_WORKFLOW_CONFIG } from "./config";
 import { getInteriorStylePrompt } from "../prompts/interiorStyles";
 import type { JobAsset, StepKind, StepStatus, VideoJob } from "./types";
@@ -31,7 +32,9 @@ export async function createJob(
   styleId = DEFAULT_WORKFLOW_CONFIG.styleId,
   aspectRatio = DEFAULT_WORKFLOW_CONFIG.aspectRatio,
   resolution = DEFAULT_WORKFLOW_CONFIG.resolution,
-  userEditRequests?: string[]
+  userEditRequests?: string[],
+  userId?: string,
+  _client?: SupabaseClient
 ): Promise<VideoJob> {
   const rootDir = await ensureJobDirs(id);
   const now = new Date().toISOString();
@@ -44,6 +47,7 @@ export async function createJob(
 
   const job: VideoJob = {
     id,
+    ...(userId ? { userId } : {}),
     rootDir,
     status: "queued",
     createdAt: now,
@@ -134,4 +138,19 @@ export async function updateJobStep(
 export async function buildJobAsset(filePath: string, name: string, type: string, size?: number): Promise<JobAsset> {
   const resolvedSize = size ?? (await stat(filePath)).size;
   return { name, path: filePath, size: resolvedSize, type };
+}
+
+export async function getJobsByUser(userId: string): Promise<VideoJob[]> {
+  const { readdir } = await import("node:fs/promises");
+  try {
+    const dirs = await readdir(DATA_DIR);
+    const jobs: VideoJob[] = [];
+    for (const dir of dirs) {
+      const job = await getJob(dir);
+      if (job && job.userId === userId) jobs.push(job);
+    }
+    return jobs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch {
+    return [];
+  }
 }

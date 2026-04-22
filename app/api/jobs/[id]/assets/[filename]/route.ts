@@ -2,6 +2,9 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getJob } from "../../../../../../lib/jobs/store";
+import { getStorageObjectKeyForPublicAsset } from "../../../../../../lib/jobs/publicAsset";
+import { isSupabaseMode } from "../../../../../../lib/supabase";
+import { getSignedUrl } from "../../../../../../lib/jobs/storage";
 
 export async function GET(
   _request: Request,
@@ -17,6 +20,15 @@ export async function GET(
   const job = await getJob(id);
   if (!job) {
     return new NextResponse("Job not found", { status: 404 });
+  }
+
+  if (isSupabaseMode()) {
+    const storageKey = getStorageObjectKeyForPublicAsset(filename, job.sourceImages, job.generatedFrames);
+    if (!storageKey) {
+      return new NextResponse("Asset not found", { status: 404 });
+    }
+    const signedUrl = await getSignedUrl(storageKey);
+    return NextResponse.redirect(signedUrl);
   }
 
   const candidates = [

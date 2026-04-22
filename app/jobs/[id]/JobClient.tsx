@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type JobStep = {
@@ -31,9 +30,17 @@ function cssAspectRatio(ratio: string): string {
   return ratio.replace(":", " / ");
 }
 
-export default function JobClient({ id }: { id: string }) {
-  const [job, setJob] = useState<JobPayload | null>(null);
-  const [error, setError] = useState("");
+export default function JobClient({
+  id,
+  initialError = "",
+  initialJob = null,
+}: {
+  id: string;
+  initialError?: string;
+  initialJob?: JobPayload | null;
+}) {
+  const [job, setJob] = useState<JobPayload | null>(initialJob);
+  const [error, setError] = useState(initialError);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +48,10 @@ export default function JobClient({ id }: { id: string }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   // Tracks indices we submitted regen for locally — gives immediate loading state
   const [localRegen, setLocalRegen] = useState<number[]>([]);
+
+  useEffect(() => {
+    setJob(initialJob);
+  }, [initialJob]);
 
   useEffect(() => {
     let active = true;
@@ -186,22 +197,6 @@ export default function JobClient({ id }: { id: string }) {
       />
       <div className="bg-video-overlay" aria-hidden="true" />
       <div id="mouse-particles" aria-hidden="true" />
-
-      <div className="header-cover" aria-hidden="true">
-        <video src="/bg.mp4" autoPlay muted loop playsInline />
-        <div className="header-cover-overlay" />
-      </div>
-
-      <header className="site-header">
-        <a className="logo" href="/">Photo → Video</a>
-        <nav className="nav-pill" aria-label="Site navigation">
-          <a href="/">Home</a>
-          <a href="#cases">Cases</a>
-        </nav>
-        <Link className="cta-dark" href="/">
-          New run
-        </Link>
-      </header>
 
       <main className="job-main">
         <div className="job-topbar">

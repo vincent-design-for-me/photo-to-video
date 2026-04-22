@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getJob } from "../../../../../../../lib/jobs/store";
+import { after, NextResponse } from "next/server";
+import { requireOwnedJob } from "../../../../../../../lib/jobs/ownership";
 import { regenerateFrame } from "../../../../../../../lib/jobs/workflow";
 import { regeneratingFrames } from "../../../../../../../lib/jobs/regenState";
 
@@ -10,10 +10,11 @@ export async function POST(
   const { id, index: indexStr } = await context.params;
   const frameIndex = parseInt(indexStr, 10);
 
-  const job = await getJob(id);
-  if (!job) {
-    return new NextResponse("Job not found", { status: 404 });
+  const result = await requireOwnedJob(id);
+  if (result.response) {
+    return result.response;
   }
+  const { job } = result;
   if (job.status !== "awaiting_review") {
     return new NextResponse("Job is not in review state", { status: 409 });
   }
@@ -36,9 +37,15 @@ export async function POST(
   }
 
   regeneratingFrames.add(key);
-  regenerateFrame(id, frameIndex, appendText)
-    .catch((error) => console.error(`Regen frame ${frameIndex} for job ${id}:`, error))
-    .finally(() => regeneratingFrames.delete(key));
+  after(async () => {
+    try {
+      await regenerateFrame(id, frameIndex, appendText);
+    } catch (error) {
+      console.error(`Regen frame ${frameIndex} for job ${id}:`, error);
+    } finally {
+      regeneratingFrames.delete(key);
+    }
+  });
 
   return NextResponse.json({ id, index: frameIndex, status: "regenerating" }, { status: 202 });
 }

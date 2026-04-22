@@ -14,3 +14,4 @@ export const getJob: typeof local.getJob = (...args) => store().getJob(...args);
 export const writeJob: typeof local.writeJob = (...args) => store().writeJob(...args);
 export const updateJobStep: typeof local.updateJobStep = (...args) => store().updateJobStep(...args);
 export const buildJobAsset: typeof local.buildJobAsset = (...args) => store().buildJobAsset(...args);
+export const getJobsByUser: typeof local.getJobsByUser = (...args) => store().getJobsByUser(...args);

@@ -13,6 +13,10 @@ If API keys are missing, the app uses preview fallbacks so the UI and job flow c
 
 ## Required API information
 
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL for browser auth and middleware.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon key for browser auth and SSR session refresh.
+- `SUPABASE_URL`: Supabase project URL for server-side job persistence and storage operations.
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key for server-side job/storage access.
 - `GEMINI_API_KEY`: Google Gemini API key for Nano Banana image generation.
 - `GEMINI_API_BASE_URL`: optional third-party Gemini-compatible base URL.
 - `GEMINI_IMAGE_MODEL`: defaults to `gemini-2.5-flash-image`.
@@ -33,6 +37,8 @@ If API keys are missing, the app uses preview fallbacks so the UI and job flow c
 Kling Skill templates can use these placeholders: `{{effectScene}}`, `{{firstFrameUrl}}`, `{{lastFrameUrl}}`, `{{prompt}}`, `{{clipSeconds}}`, and `{{aspectRatio}}`.
 
 Kling providers differ in parameter names for first frame and last frame. The direct endpoint adapter sends `image`, `first_frame`, and `last_frame`; Skill mode sends a configurable JSON body from `lib/providers/klingSkill.ts`.
+
+In Supabase mode, Kling frame URLs are generated from Supabase Storage signed URLs. `PUBLIC_ASSET_BASE_URL` is only needed for non-Supabase/public-route deployments.
 
 For Google's Gemini API, leave `GEMINI_API_BASE_URL` / `IMAGE_BASE_URL` blank and set only the API key and model. For third-party Gemini providers, set the base URL to the Gemini-compatible API root, for example `https://provider.example/v1beta`; do not use a website or dashboard URL such as `https://www.example.com`. The app calls `/models/{model}:generateContent` and sends both `Authorization: Bearer <key>` and `x-goog-api-key`.
 

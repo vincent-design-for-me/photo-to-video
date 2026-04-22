@@ -3,10 +3,23 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { buildJobAsset, createJob, ensureJobDirs } from "../../../lib/jobs/store";
+import { requireAuthenticatedUserId } from "../../../lib/jobs/ownership";
 import { isSupabaseMode } from "../../../lib/supabase";
-import { uploadBufferToStorage, storageKey } from "../../../lib/jobs/storage";
+import { isStorageRlsError, uploadBufferToStorage, storageKey } from "../../../lib/jobs/storage";
+import { createClient as createServerClient } from "../../../lib/supabase/server";
 
 export async function POST(request: Request) {
+  let userId: string | undefined;
+  let requestSupabase: Awaited<ReturnType<typeof createServerClient>> | undefined;
+  if (isSupabaseMode()) {
+    requestSupabase = await createServerClient();
+    const auth = await requireAuthenticatedUserId();
+    if (auth.response) {
+      return auth.response;
+    }
+    userId = auth.userId;
+  }
+
   const formData = await request.formData();
   const files = formData.getAll("images").filter((value): value is File => value instanceof File);
   const styleId = stringValue(formData.get("styleId"));
@@ -40,7 +53,18 @@ export async function POST(request: Request) {
 
     if (isSupabaseMode()) {
       const key = storageKey(jobId, `source/${safeName}`);
-      await uploadBufferToStorage(key, buffer, contentType);
+      try {
+        await uploadBufferToStorage(key, buffer, contentType, requestSupabase);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Storage upload failed";
+        if (isStorageRlsError(message)) {
+          return new NextResponse(
+            "Storage upload was rejected by Supabase RLS. Apply the latest storage policy migration and verify your storage bucket policies.",
+            { status: 500 }
+          );
+        }
+        throw error;
+      }
       assets.push(await buildJobAsset(key, file.name || safeName, contentType, buffer.byteLength));
     } else {
       const outputPath = path.join(sourceDir, safeName);
@@ -49,7 +73,16 @@ export async function POST(request: Request) {
     }
   }
 
-  const job = await createJob(assets, jobId, styleId, aspectRatio, resolution, userEditRequests);
+  const job = await createJob(
+    assets,
+    jobId,
+    styleId,
+    aspectRatio,
+    resolution,
+    userEditRequests,
+    userId,
+    requestSupabase
+  );
   return NextResponse.json({ id: job.id, status: job.status });
 }
 
