@@ -1982,8 +1982,8 @@ a {
 /* ── History page ── */
 .history-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
 }
 
 .history-card {
@@ -1991,17 +1991,24 @@ a {
   flex-direction: column;
   text-decoration: none;
   color: inherit;
+  border-radius: 20px;
   overflow: hidden;
-  transition: transform 180ms, box-shadow 180ms;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease;
 }
 
 .history-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
 }
 
 .history-thumb {
-  aspect-ratio: 16 / 10;
+  position: relative;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.04);
 }
@@ -2010,6 +2017,13 @@ a {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top;
+  display: block;
+  transition: transform 300ms ease;
+}
+
+.history-card:hover .history-thumb img {
+  transform: scale(1.04);
 }
 
 .history-thumb-empty {
@@ -2021,58 +2035,102 @@ a {
   color: rgba(255, 255, 255, 0.3);
 }
 
-.history-info {
-  display: flex;
-  flex-wrap: wrap;
+/* Status badge overlaid top-left on the image */
+.history-status-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-}
-
-.pill {
+  gap: 6px;
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 3px 10px;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  padding: 5px 12px 5px 8px;
   border-radius: 999px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.pill.complete {
-  background: rgba(74, 222, 128, 0.2);
-  color: #4ade80;
+.history-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.pill.failed {
-  background: rgba(248, 113, 113, 0.2);
-  color: #f87171;
+.history-status-badge.complete {
+  background: rgba(20, 40, 20, 0.65);
+  color: #6ee88a;
+  border: 1px solid rgba(110, 232, 138, 0.25);
+}
+.history-status-badge.complete .history-status-dot {
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
 }
 
-.pill.running {
-  background: rgba(96, 165, 250, 0.2);
-  color: #60a5fa;
+.history-status-badge.failed {
+  background: rgba(40, 15, 15, 0.65);
+  color: #fca5a5;
+  border: 1px solid rgba(252, 165, 165, 0.25);
+}
+.history-status-badge.failed .history-status-dot {
+  background: #f87171;
+  box-shadow: 0 0 6px #f87171;
 }
 
-.pill.queued {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.5);
+.history-status-badge.running {
+  background: rgba(15, 25, 50, 0.65);
+  color: #93c5fd;
+  border: 1px solid rgba(147, 197, 253, 0.25);
+}
+.history-status-badge.running .history-status-dot {
+  background: #60a5fa;
+  box-shadow: 0 0 6px #60a5fa;
+  animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
-.history-style {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+.history-status-badge.queued {
+  background: rgba(30, 30, 30, 0.65);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.history-status-badge.queued .history-status-dot {
+  background: rgba(255, 255, 255, 0.4);
 }
 
-.history-date {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  margin-left: auto;
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
 }
 
-.history-count {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.35);
+/* Card info section */
+.history-info {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.history-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.history-subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-dot {
+  opacity: 0.5;
 }
 
 @media (max-width: 600px) {

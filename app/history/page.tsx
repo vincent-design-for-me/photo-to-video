@@ -49,21 +49,25 @@ export default async function HistoryPage() {
         ) : (
           <div className="history-grid">
             {jobs.map((job) => (
-              <a key={job.id} href={`/jobs/${job.id}`} className="history-card glass-panel">
+              <a key={job.id} href={`/jobs/${job.id}`} className="history-card">
                 <div className="history-thumb">
                   {job.sourceImages?.[0] ? (
                     <img src={`/api/jobs/${job.id}/sources/0`} alt="" />
                   ) : (
                     <div className="history-thumb-empty">No preview</div>
                   )}
+                  <span className={`history-status-badge ${statusColor(job.status)}`}>
+                    <span className="history-status-dot" />
+                    {job.status.replace(/_/g, " ")}
+                  </span>
                 </div>
                 <div className="history-info">
-                  <span className={`pill ${statusColor(job.status)}`}>{job.status}</span>
-                  <span className="history-style">{job.config?.style || "Default"}</span>
-                  <span className="history-date">{fmtDate(job.createdAt)}</span>
-                  <span className="history-count">
+                  <div className="history-title">{job.config?.style || "Default"}</div>
+                  <div className="history-subtitle">
+                    {fmtDate(job.createdAt)}
+                    <span className="history-dot">·</span>
                     {job.sourceImages?.length || 0} photo{(job.sourceImages?.length || 0) !== 1 ? "s" : ""}
-                  </span>
+                  </div>
                 </div>
               </a>
             ))}
