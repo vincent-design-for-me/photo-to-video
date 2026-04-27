@@ -1,6 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+
+function BeforeAfterSlider({
+  beforeSrc,
+  afterSrc,
+  ratio,
+  index,
+  className = "",
+}: {
+  beforeSrc: string;
+  afterSrc: string;
+  ratio: string;
+  index: number;
+  className?: string;
+}) {
+  const [pos, setPos] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const move = useCallback((clientX: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos(Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100)));
+  }, []);
+
+  const stopClickAfterDrag = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const start = dragStartRef.current;
+    dragStartRef.current = null;
+    if (!start) return;
+    const moved = Math.abs(e.clientX - start.x) > 4 || Math.abs(e.clientY - start.y) > 4;
+    if (moved) {
+      e.stopPropagation();
+    }
+  }, []);
+
+  const onDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      const onMove = (ev: MouseEvent) => move(ev.clientX);
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [move]
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className={`ba-slider${className ? ` ${className}` : ""}`}
+      style={{ aspectRatio: ratio.replace(":", " / ") }}
+      onMouseDown={(e) => { onDragStart(e); move(e.clientX); }}
+      onClick={stopClickAfterDrag}
+      onTouchStart={(e) => {
+        const touch = e.touches[0];
+        dragStartRef.current = { x: touch.clientX, y: touch.clientY };
+        move(touch.clientX);
+      }}
+      onTouchMove={(e) => move(e.touches[0].clientX)}
+    >
+      <img className="ba-slider-img" src={afterSrc} alt={`Generated frame ${index + 1}`} loading="lazy" />
+      <img
+        className="ba-slider-img"
+        src={beforeSrc}
+        alt={`Source ${index + 1}`}
+        loading="lazy"
+        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+      />
+      <div
+        className="ba-divider"
+        style={{ left: `${pos}%` }}
+        onMouseDown={(e) => { e.stopPropagation(); onDragStart(e); }}
+      >
+        <div className="ba-handle">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 6l-6 6 6 6" />
+            <path d="M16 6l6 6-6 6" />
+          </svg>
+        </div>
+      </div>
+      <span className="ba-chip ba-chip-left">Before</span>
+      <span className="ba-chip ba-chip-right">After</span>
+    </div>
+  );
+}
 
 type JobStep = {
   id: string;
@@ -45,7 +133,7 @@ export default function JobClient({
   const [editText, setEditText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<{ index: number; kind: "before" | "after" } | null>(null);
   // Tracks indices we submitted regen for locally — gives immediate loading state
   const [localRegen, setLocalRegen] = useState<number[]>([]);
 
@@ -117,9 +205,9 @@ export default function JobClient({
   }, []);
 
   useEffect(() => {
-    if (lightboxIndex === null) return;
+    if (lightbox === null) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setLightboxIndex(null);
+      if (e.key === "Escape") setLightbox(null);
     }
     window.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
@@ -128,7 +216,7 @@ export default function JobClient({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [lightboxIndex]);
+  }, [lightbox]);
 
   async function retry() {
     await fetch(`/api/jobs/${id}/run`, { method: "POST" });
@@ -177,10 +265,11 @@ export default function JobClient({
     localRegen.length > 0;
 
   const lightboxFrame =
-    lightboxIndex !== null && job
+    lightbox !== null && job
       ? {
-          index: lightboxIndex,
-          step: job.steps.find((s) => s.kind === "image" && s.index === lightboxIndex),
+          index: lightbox.index,
+          kind: lightbox.kind,
+          step: job.steps.find((s) => s.kind === "image" && s.index === lightbox.index),
         }
       : null;
 
@@ -276,27 +365,50 @@ export default function JobClient({
                       if (!isSelected) setEditText("");
                     }}
                   >
-                    <img
-                      src={`/api/jobs/${id}/frames/${i}${vParam}`}
-                      alt={`Generated frame ${i + 1}`}
+                    <BeforeAfterSlider
+                      index={i}
+                      beforeSrc={`/api/jobs/${id}/sources/${i}`}
+                      afterSrc={`/api/jobs/${id}/frames/${i}${vParam}`}
+                      ratio={job.config.aspectRatio}
+                      className="review-ba-slider"
                     />
                     {!isRegenerating && !isFailed && (
-                      <button
-                        type="button"
-                        className="zoom-btn"
-                        aria-label={`Zoom frame ${i + 1}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLightboxIndex(i);
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="m20 20-3.5-3.5" />
-                          <path d="M11 8v6" />
-                          <path d="M8 11h6" />
-                        </svg>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="zoom-btn zoom-btn-before"
+                          aria-label={`Zoom source photo for frame ${i + 1}`}
+                          title="Zoom before photo"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightbox({ index: i, kind: "before" });
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" />
+                            <path d="M11 8v6" />
+                            <path d="M8 11h6" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="zoom-btn zoom-btn-after"
+                          aria-label={`Zoom generated frame ${i + 1}`}
+                          title="Zoom generated frame"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightbox({ index: i, kind: "after" });
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" />
+                            <path d="M11 8v6" />
+                            <path d="M8 11h6" />
+                          </svg>
+                        </button>
+                      </>
                     )}
                     {isRegenerating && (
                       <div className="loader-overlay">
@@ -346,33 +458,24 @@ export default function JobClient({
           </section>
         ) : null}
 
-        {!isReviewMode && job && job.generatedFrames.length > 0 ? (
+        {job && job.generatedFrames.length > 0 && !isReviewMode ? (
           <section className="glass-panel">
             <h2>Before &amp; After</h2>
-            <div className="before-after-list">
-              {job.generatedFrames.map((_, i) => (
-                <div className="before-after-pair" key={i}>
-                  <div className="ba-side">
-                    <span className="ba-label">Before</span>
-                    <img
-                      className="ba-img"
-                      src={`/api/jobs/${id}/sources/${i}`}
-                      alt={`Source image ${i + 1}`}
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="ba-arrow">→</div>
-                  <div className="ba-side">
-                    <span className="ba-label">After</span>
-                    <img
-                      className="ba-img"
-                      src={`/api/jobs/${id}/frames/${i}`}
-                      alt={`Generated frame ${i + 1}`}
-                      loading="lazy"
-                    />
-                  </div>
-                </div>
-              ))}
+            <p className="fineprint" style={{ marginTop: -8, marginBottom: 16 }}>Drag to compare</p>
+            <div className="ba-slider-grid">
+              {job.generatedFrames.map((_, i) => {
+                const imageStep = job.steps.find((s) => s.kind === "image" && s.index === i);
+                const vParam = imageStep?.updatedAt ? `?v=${encodeURIComponent(imageStep.updatedAt)}` : "";
+                return (
+                  <BeforeAfterSlider
+                    key={i}
+                    index={i}
+                    beforeSrc={`/api/jobs/${id}/sources/${i}`}
+                    afterSrc={`/api/jobs/${id}/frames/${i}${vParam}`}
+                    ratio={job.config.aspectRatio}
+                  />
+                );
+              })}
             </div>
           </section>
         ) : null}
@@ -435,30 +538,40 @@ export default function JobClient({
       {lightboxFrame && job ? (
         <div
           className="lightbox-backdrop"
-          onClick={() => setLightboxIndex(null)}
+          onClick={() => setLightbox(null)}
           role="dialog"
           aria-modal="true"
-          aria-label={`Enlarged view of Frame ${lightboxFrame.index + 1}`}
+          aria-label={`Enlarged view of ${lightboxFrame.kind === "before" ? "source photo" : "generated frame"} ${lightboxFrame.index + 1}`}
         >
           <button
             type="button"
             className="lightbox-close"
             aria-label="Close enlarged view"
-            onClick={(e) => { e.stopPropagation(); setLightboxIndex(null); }}
+            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
           >
             ×
           </button>
-          <img
-            className="lightbox-img"
-            src={`/api/jobs/${id}/frames/${lightboxFrame.index}${
-              lightboxFrame.step?.updatedAt
-                ? `?v=${encodeURIComponent(lightboxFrame.step.updatedAt)}`
-                : ""
-            }`}
-            alt={`Generated frame ${lightboxFrame.index + 1}`}
+          <div
+            className="lightbox-figure"
             onClick={(e) => e.stopPropagation()}
-          />
-          <div className="lightbox-caption">Frame {lightboxFrame.index + 1}</div>
+          >
+            <img
+              className="lightbox-img"
+              src={
+                lightboxFrame.kind === "before"
+                  ? `/api/jobs/${id}/sources/${lightboxFrame.index}`
+                  : `/api/jobs/${id}/frames/${lightboxFrame.index}${
+                      lightboxFrame.step?.updatedAt
+                        ? `?v=${encodeURIComponent(lightboxFrame.step.updatedAt)}`
+                        : ""
+                    }`
+              }
+              alt={`${lightboxFrame.kind === "before" ? "Source photo" : "Generated frame"} ${lightboxFrame.index + 1}`}
+            />
+          </div>
+          <div className="lightbox-caption">
+            {lightboxFrame.kind === "before" ? "Before" : "After"} · Frame {lightboxFrame.index + 1}
+          </div>
         </div>
       ) : null}
     </div>
