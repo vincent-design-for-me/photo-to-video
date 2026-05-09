@@ -55,6 +55,20 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
     });
   }, [pathname, user]);
 
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    if (pathname !== "/") { setScrolled(false); return; }
+    function onScroll() {
+      const target = document.getElementById("how-it-works");
+      if (!target) return;
+      setScrolled(target.getBoundingClientRect().top <= 70);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [pathname]);
+
   const isAuth = pathname.startsWith("/login") || pathname.startsWith("/signup") ||
     pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password");
   if (isAuth) return null;
@@ -74,7 +88,7 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
 
   return (
     <>
-      <header className="site-header">
+      <header className={`site-header${scrolled ? " site-header--scrolled" : ""}`}>
         <a href="/" className="logo">Photo to Video</a>
         <div className="nav-pill" ref={pillRef}>
           <span className="nav-pill-slider" style={sliderStyle} />
@@ -99,9 +113,7 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
               </div>
             )}
           </div>
-        ) : (
-          <a href="/login" className="cta-dark">Sign In</a>
-        )}
+        ) : null}
       </header>
     </>
   );
