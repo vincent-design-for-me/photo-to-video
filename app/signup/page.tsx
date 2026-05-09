@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -11,84 +12,88 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-
+  const router = useRouter();
   const supabaseRef = useRef(createClient());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSuccess("");
-
     if (password !== confirm) {
       setError("Passwords do not match");
       return;
     }
-
     setLoading(true);
-
     const { error } = await supabaseRef.current.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
-
     if (error) {
       setError(error.message);
       setLoading(false);
       return;
     }
-
     setSuccess("Check your email for a confirmation link.");
     setLoading(false);
   }
 
   return (
-    <div className="auth-page">
-      <video className="auth-bg-video" autoPlay muted loop playsInline src="/auth-bg.mp4" />
+    <div className="auth-split">
+      <div className="auth-split-image">
+        <img src="/auth-hero.jpg" alt="Scenic landscape" />
+        <a href="/" className="auth-split-logo">Photo → Video</a>
+        <p className="auth-image-caption">Photo by Tilak Baloni · Unsplash</p>
+      </div>
 
-      <div className="auth-card">
-        <p className="auth-logo">Photo → Video</p>
-        <h1 className="auth-title">Create account</h1>
-        <p className="auth-subtitle">Start turning photos into videos</p>
+      <div className="auth-split-form">
+        <h1 className="auth-split-title">
+          Create Your Account to<br />Unleash Your Dreams
+        </h1>
+
+        <div className="auth-split-nav">
+          <button
+            className="auth-back-btn"
+            onClick={() => router.back()}
+            type="button"
+            aria-label="Go back"
+          >
+            ←
+          </button>
+          <span className="auth-nav-text">
+            Already have an account?
+            <Link href="/login">Log in</Link>
+          </span>
+        </div>
 
         {error && <div className="auth-message error">{error}</div>}
         {success && <div className="auth-message success">{success}</div>}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-field">
-            <label htmlFor="email">Email</label>
             <input
-              id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
             />
           </div>
-
           <div className="auth-field">
-            <label htmlFor="password">Password</label>
             <input
-              id="password"
               type="password"
-              placeholder="At least 6 characters"
+              placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
             />
           </div>
-
           <div className="auth-field">
-            <label htmlFor="confirm">Confirm password</label>
             <input
-              id="confirm"
               type="password"
-              placeholder="••••••••"
+              placeholder="Confirm password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               required
@@ -96,14 +101,17 @@ export default function SignupPage() {
             />
           </div>
 
-          <button type="submit" className="auth-submit" disabled={loading}>
-            {loading ? "Creating account…" : "Sign Up"}
+          <button type="submit" className="auth-split-submit" disabled={loading}>
+            <span>{loading ? "Creating account…" : "Start Creating"}</span>
+            <span className="auth-split-submit-arrow">→</span>
           </button>
         </form>
 
-        <p className="auth-footer">
-          Already have an account?{" "}
-          <Link href="/login">Sign in</Link>
+        <p className="auth-legal">
+          By signing in, you agree to Photo → Video&apos;s{" "}
+          <a href="#">Terms of Service</a>,{" "}
+          <a href="#">Privacy Policy</a> and{" "}
+          <a href="#">Data Usage Properties</a>.
         </p>
       </div>
     </div>
