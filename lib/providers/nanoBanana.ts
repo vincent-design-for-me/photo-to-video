@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildGeminiGenerateContentUrl, extractGeminiInlineImageData, getImageGenerationConfig, getLLMConfig, readGeminiJsonResponse } from "./geminiCompat";
+import type { ImageGenerationConfig } from "./geminiCompat";
 
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, delayMs = 5000): Promise<Response> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -35,8 +36,12 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
   const mimeType = inferMimeType(input.sourceImagePath);
 
   if (config.baseUrl) {
+    if (config.format === "openai-images") {
+      return await generateFrameOpenAIImages(input, config, imageData, mimeType);
+    }
+
     if (config.format !== "gemini-native") {
-      throw new Error(`Unsupported image API format "${config.format}". Set IMAGE_API_FORMAT=gemini-native for this provider.`);
+      throw new Error(`Unsupported image API format "${config.format}". Set IMAGE_API_FORMAT=openai-images or IMAGE_API_FORMAT=gemini-native.`);
     }
 
     const imageUrl = buildGeminiGenerateContentUrl(config.baseUrl, config.model);
@@ -67,9 +72,11 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
     };
 
     const response = await fetchWithRetry(imageUrl, requestOptions);
-    const data = extractGeminiInlineImageData(await readGeminiJsonResponse(response));
+    const parsed = await readGeminiJsonResponse(response);
+    const data = extractGeminiInlineImageData(parsed);
     if (!data) {
-      throw new Error("Third-party Gemini endpoint did not return an inline image");
+      const preview = JSON.stringify(parsed).slice(0, 400);
+      throw new Error(`Third-party Gemini endpoint did not return an inline image. Response: ${preview}`);
     }
 
     await writeFile(input.outputPath, Buffer.from(data, "base64"));
@@ -103,6 +110,54 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
   }
 
   await writeFile(input.outputPath, Buffer.from(data, "base64"));
+  return input.outputPath;
+}
+
+async function generateFrameOpenAIImages(
+  input: GenerateInteriorFrameInput,
+  config: ImageGenerationConfig,
+  imageData: Buffer,
+  mimeType: string
+): Promise<string> {
+  const baseUrl = config.baseUrl!.replace(/\/$/, "");
+  const base64Data = imageData.toString("base64");
+  const resolution = input.resolution === "4k" ? "4k" : "2k";
+
+  const genResponse = await fetchWithRetry(`${baseUrl}/images/generations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey ?? ""}`
+    },
+    body: JSON.stringify({
+      model: config.model,
+      prompt: input.prompt,
+      resolution,
+      aspect_ratio: input.aspectRatio,
+      reference_images: [`data:${mimeType};base64,${base64Data}`],
+      response_format: "url"
+    })
+  });
+
+  if (!genResponse.ok) {
+    const body = await genResponse.text();
+    throw new Error(`Image generation failed (${genResponse.status}): ${body.slice(0, 500)}`);
+  }
+
+  const parsed = (await genResponse.json()) as { data?: Array<{ url?: string }> };
+  const resultUrl = parsed.data?.[0]?.url;
+  if (!resultUrl) {
+    throw new Error(`OpenAI image endpoint did not return a URL. Response: ${JSON.stringify(parsed).slice(0, 400)}`);
+  }
+
+  const dlResponse = await fetch(resultUrl, {
+    headers: { Authorization: `Bearer ${config.apiKey ?? ""}` }
+  });
+  if (!dlResponse.ok) {
+    throw new Error(`Failed to download generated image (${dlResponse.status}): ${resultUrl}`);
+  }
+
+  await writeFile(input.outputPath, Buffer.from(await dlResponse.arrayBuffer()));
   return input.outputPath;
 }
 
