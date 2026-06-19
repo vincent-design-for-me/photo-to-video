@@ -1,0 +1,32 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "custom-property-empty-line-before": null,
+    "comment-empty-line-before": null,
+    "no-descending-specificity": null,
+    "value-keyword-case": null
+  },
+  "overrides": [
+    {
+      "files": ["**/*.module.css"],
+      "plugins": ["stylelint-declaration-strict-value"],
+      "rules": {
+        "scale-unlimited/declaration-strict-value": [
+          ["/color$/", "fill", "stroke", "padding", "margin", "gap", "border-radius"],
+          {
+            "ignoreValues": ["transparent", "inherit", "currentColor", "initial", "unset", "none", "auto", "0"],
+            "ignoreFunctions": false,
+            "disableFix": true,
+            "message": "Use a design token (var(--…)) instead of an inline value — see docs/STYLING.md"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["app/styles.css"],
+      "rules": {
+        "scale-unlimited/declaration-strict-value": null
+      }
+    }
+  ]
+}

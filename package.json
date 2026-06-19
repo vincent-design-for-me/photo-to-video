@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "lint:css": "stylelint \"app/**/*.module.css\" --allow-empty-input",
+    "lint:css:legacy": "stylelint \"app/styles.css\"",
+    "pretest": "npm run lint:css",
     "test": "node --import tsx --test test/*.test.ts",
     "kling:jwt": "node --env-file=.env.local --import tsx scripts/create-kling-jwt.ts"
   },
@@ -23,6 +26,9 @@
     "@types/node": "^22.15.3",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "stylelint": "^17.13.0",
+    "stylelint-config-standard": "^40.0.0",
+    "stylelint-declaration-strict-value": "^1.11.1",
     "typescript": "^5.8.3"
   }
 }
