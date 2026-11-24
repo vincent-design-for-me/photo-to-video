@@ -1,7 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { getD1Database } from "../cloudflare/d1";
+import { and, desc, eq } from "drizzle-orm";
+import { getDb, jobs, type JobRow, type NewJobRow } from "../db";
 import { DEFAULT_WORKFLOW_CONFIG } from "./config";
 import { getInteriorStylePrompt } from "../prompts/interiorStyles";
 import {
@@ -144,69 +145,65 @@ export async function createJob(
 }
 
 export async function getJob(jobId: string): Promise<VideoJob | null> {
-  const db = getD1Database();
-  const row = await db
-    .prepare("SELECT * FROM jobs WHERE id = ? LIMIT 1")
-    .bind(jobId)
-    .first<Record<string, unknown>>();
-  if (!row) return null;
-  return rowToJob(row);
+  const db = getDb();
+  const row = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1).get();
+  return row ? rowToJob(row) : null;
 }
 
 export async function writeJob(job: VideoJob): Promise<void> {
-  const db = getD1Database();
+  const db = getDb();
+  const values: NewJobRow = {
+    id: job.id,
+    userId: job.userId ?? null,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    config: job.config,
+    sourceImages: job.sourceImages,
+    generatedFrames: job.generatedFrames,
+    frameJudgements: job.frameJudgements ?? null,
+    reviewDecisions: job.reviewDecisions ?? null,
+    framePrompts: job.framePrompts ?? null,
+    userEditRequests: job.userEditRequests ?? null,
+    generatedClips: job.generatedClips,
+    finalVideoPath: job.finalVideoPath ?? null,
+    error: job.error ?? null,
+    steps: job.steps,
+  };
+
   await db
-    .prepare(
-      `INSERT INTO jobs (
-        id, user_id, status, created_at, updated_at, config,
-        source_images, generated_frames, frame_judgements, review_decisions,
-        frame_prompts, user_edit_requests, generated_clips, final_video_path, error, steps
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        user_id = excluded.user_id,
-        status = excluded.status,
-        updated_at = excluded.updated_at,
-        config = excluded.config,
-        source_images = excluded.source_images,
-        generated_frames = excluded.generated_frames,
-        frame_judgements = excluded.frame_judgements,
-        review_decisions = excluded.review_decisions,
-        frame_prompts = excluded.frame_prompts,
-        user_edit_requests = excluded.user_edit_requests,
-        generated_clips = excluded.generated_clips,
-        final_video_path = excluded.final_video_path,
-        error = excluded.error,
-        steps = excluded.steps`
-    )
-    .bind(
-      job.id,
-      job.userId ?? null,
-      job.status,
-      job.createdAt,
-      job.updatedAt,
-      JSON.stringify(job.config),
-      JSON.stringify(job.sourceImages),
-      JSON.stringify(job.generatedFrames),
-      job.frameJudgements !== undefined ? JSON.stringify(job.frameJudgements) : null,
-      job.reviewDecisions !== undefined ? JSON.stringify(job.reviewDecisions) : null,
-      job.framePrompts !== undefined ? JSON.stringify(job.framePrompts) : null,
-      job.userEditRequests !== undefined ? JSON.stringify(job.userEditRequests) : null,
-      JSON.stringify(job.generatedClips),
-      job.finalVideoPath ?? null,
-      job.error ?? null,
-      JSON.stringify(job.steps)
-    )
+    .insert(jobs)
+    .values(values)
+    .onConflictDoUpdate({
+      target: jobs.id,
+      set: {
+        userId: values.userId,
+        status: values.status,
+        updatedAt: values.updatedAt,
+        config: values.config,
+        sourceImages: values.sourceImages,
+        generatedFrames: values.generatedFrames,
+        frameJudgements: values.frameJudgements,
+        reviewDecisions: values.reviewDecisions,
+        framePrompts: values.framePrompts,
+        userEditRequests: values.userEditRequests,
+        generatedClips: values.generatedClips,
+        finalVideoPath: values.finalVideoPath,
+        error: values.error,
+        steps: values.steps,
+      },
+    })
     .run();
 }
 
 /**
- * Optimistic-concurrency (CAS on `updated_at`) column-scoped mutation in D1.
+ * Optimistic-concurrency (CAS on `updated_at`) column-scoped mutation in D1 via Drizzle.
  */
 export async function mutateJob(
   jobId: string,
   updater: (current: VideoJob) => JobPatch | null
 ): Promise<VideoJob | null> {
-  const db = getD1Database();
+  const db = getDb();
 
   for (let attempt = 1; attempt <= MAX_CAS_RETRIES; attempt += 1) {
     const current = await getJob(jobId);
@@ -216,16 +213,16 @@ export async function mutateJob(
     if (!patch) return current;
 
     const now = nextTimestampAfter(current.updatedAt);
-    const { setClauses, values } = patchToSql(patch, now);
+    const setValues = patchToDrizzleSet(patch, now);
 
-    const result = await db
-      .prepare(
-        `UPDATE jobs SET ${setClauses.join(", ")} WHERE id = ? AND updated_at = ? RETURNING *`
-      )
-      .bind(...values, jobId, current.updatedAt)
-      .all<Record<string, unknown>>();
+    const updatedRows = await db
+      .update(jobs)
+      .set(setValues)
+      .where(and(eq(jobs.id, jobId), eq(jobs.updatedAt, current.updatedAt)))
+      .returning()
+      .all();
 
-    const updatedRow = result.results[0];
+    const updatedRow = updatedRows[0];
     if (updatedRow) {
       return rowToJob(updatedRow);
     }
@@ -377,12 +374,14 @@ export async function buildJobAsset(filePath: string, name: string, type: string
 }
 
 export async function getJobsByUser(userId: string): Promise<VideoJob[]> {
-  const db = getD1Database();
-  const res = await db
-    .prepare("SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC")
-    .bind(userId)
-    .all<Record<string, unknown>>();
-  return res.results.map(rowToJob);
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.userId, userId))
+    .orderBy(desc(jobs.createdAt))
+    .all();
+  return rows.map(rowToJob);
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -394,70 +393,43 @@ function nextTimestampAfter(previousIso: string): string {
   return new Date(nextMs).toISOString();
 }
 
-function patchToSql(
-  patch: JobPatch,
-  updatedAt: string
-): { setClauses: string[]; values: unknown[] } {
-  const setClauses: string[] = ["updated_at = ?"];
-  const values: unknown[] = [updatedAt];
+function patchToDrizzleSet(patch: JobPatch, updatedAt: string): Partial<NewJobRow> {
+  const setValues: Partial<NewJobRow> = { updatedAt };
 
-  const add = (col: string, value: unknown) => {
-    setClauses.push(`${col} = ?`);
-    values.push(value);
-  };
+  if ("status" in patch) setValues.status = patch.status;
+  if ("config" in patch) setValues.config = patch.config;
+  if ("sourceImages" in patch) setValues.sourceImages = patch.sourceImages;
+  if ("generatedFrames" in patch) setValues.generatedFrames = patch.generatedFrames;
+  if ("frameJudgements" in patch) setValues.frameJudgements = patch.frameJudgements ?? null;
+  if ("reviewDecisions" in patch) setValues.reviewDecisions = patch.reviewDecisions ?? null;
+  if ("framePrompts" in patch) setValues.framePrompts = patch.framePrompts ?? null;
+  if ("userEditRequests" in patch) setValues.userEditRequests = patch.userEditRequests ?? null;
+  if ("generatedClips" in patch) setValues.generatedClips = patch.generatedClips;
+  if ("finalVideoPath" in patch) setValues.finalVideoPath = patch.finalVideoPath ?? null;
+  if ("error" in patch) setValues.error = patch.error ?? null;
+  if ("steps" in patch) setValues.steps = patch.steps;
 
-  if ("status" in patch) add("status", patch.status);
-  if ("config" in patch) add("config", JSON.stringify(patch.config));
-  if ("sourceImages" in patch) add("source_images", JSON.stringify(patch.sourceImages));
-  if ("generatedFrames" in patch) add("generated_frames", JSON.stringify(patch.generatedFrames));
-  if ("frameJudgements" in patch) {
-    add("frame_judgements", patch.frameJudgements !== undefined ? JSON.stringify(patch.frameJudgements) : null);
-  }
-  if ("reviewDecisions" in patch) {
-    add("review_decisions", patch.reviewDecisions !== undefined ? JSON.stringify(patch.reviewDecisions) : null);
-  }
-  if ("framePrompts" in patch) {
-    add("frame_prompts", patch.framePrompts !== undefined ? JSON.stringify(patch.framePrompts) : null);
-  }
-  if ("userEditRequests" in patch) {
-    add("user_edit_requests", patch.userEditRequests !== undefined ? JSON.stringify(patch.userEditRequests) : null);
-  }
-  if ("generatedClips" in patch) add("generated_clips", JSON.stringify(patch.generatedClips));
-  if ("finalVideoPath" in patch) add("final_video_path", patch.finalVideoPath ?? null);
-  if ("error" in patch) add("error", patch.error ?? null);
-  if ("steps" in patch) add("steps", JSON.stringify(patch.steps));
-
-  return { setClauses, values };
+  return setValues;
 }
 
-function parseJson<T>(raw: unknown, fallback: T): T {
-  if (raw === null || raw === undefined) return fallback;
-  if (typeof raw !== "string") return raw as T;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function rowToJob(row: Record<string, unknown>): VideoJob {
+export function rowToJob(row: JobRow): VideoJob {
   return {
-    id: row.id as string,
-    userId: (row.user_id as string | null) ?? undefined,
-    rootDir: path.join(TMP_DIR, row.id as string),
-    status: row.status as VideoJob["status"],
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-    config: parseJson(row.config, DEFAULT_WORKFLOW_CONFIG),
-    sourceImages: parseJson<JobAsset[]>(row.source_images, []),
-    generatedFrames: parseJson<string[]>(row.generated_frames, []),
-    frameJudgements: parseJson<VideoJob["frameJudgements"]>(row.frame_judgements, undefined),
-    reviewDecisions: parseJson<VideoJob["reviewDecisions"]>(row.review_decisions, undefined),
-    framePrompts: parseJson<string[] | undefined>(row.frame_prompts, undefined),
-    userEditRequests: parseJson<string[] | undefined>(row.user_edit_requests, undefined),
-    generatedClips: parseJson<string[]>(row.generated_clips, []),
-    finalVideoPath: (row.final_video_path as string | null) ?? undefined,
-    error: (row.error as string | null) ?? undefined,
-    steps: parseJson<VideoJob["steps"]>(row.steps, []),
+    id: row.id,
+    userId: row.userId ?? undefined,
+    rootDir: path.join(TMP_DIR, row.id),
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    config: row.config ?? DEFAULT_WORKFLOW_CONFIG,
+    sourceImages: row.sourceImages ?? [],
+    generatedFrames: row.generatedFrames ?? [],
+    frameJudgements: row.frameJudgements ?? undefined,
+    reviewDecisions: row.reviewDecisions ?? undefined,
+    framePrompts: row.framePrompts ?? undefined,
+    userEditRequests: row.userEditRequests ?? undefined,
+    generatedClips: row.generatedClips ?? [],
+    finalVideoPath: row.finalVideoPath ?? undefined,
+    error: row.error ?? undefined,
+    steps: row.steps ?? [],
   };
 }

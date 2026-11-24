@@ -11,7 +11,11 @@
     "pretest": "npm run lint:css",
     "test": "node --import tsx --test test/*.test.ts",
     "kling:jwt": "node --env-file=.env.local --import tsx scripts/create-kling-jwt.ts",
-    "judge:gallery": "node --env-file=.env.local --import tsx scripts/judge-gallery.ts"
+    "judge:gallery": "node --env-file=.env.local --import tsx scripts/judge-gallery.ts",
+    "db:generate": "npx drizzle-kit generate",
+    "db:migrate": "node --env-file=.env.local ./node_modules/.bin/drizzle-kit migrate",
+    "db:studio": "node --env-file=.env.local ./node_modules/.bin/drizzle-kit studio",
+    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1175.0",

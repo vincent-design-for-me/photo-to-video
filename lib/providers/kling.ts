@@ -3,9 +3,9 @@ import path from "node:path";
 import { DEFAULT_RETRYABLE_STATUSES, fetchWithRetry, isTransientFetchError } from "../http/fetchWithRetry";
 import { createPlaceholderClip } from "../video/ffmpeg";
 import { buildKlingAuthorization } from "./klingAuth";
-import { generateKlingSkillClip } from "./klingSkill";
+import { checkKlingSkillTaskOnce, generateKlingSkillClip, submitKlingSkillTask } from "./klingSkill";
 
-type GenerateKlingClipInput = {
+export type GenerateKlingClipInput = {
   jobId: string;
   firstFramePath: string;
   lastFramePath: string;
@@ -14,6 +14,17 @@ type GenerateKlingClipInput = {
   clipSeconds: number;
   outputPath: string;
 };
+
+export type KlingProviderKind = "image2video" | "skill";
+
+export type KlingSubmissionResult =
+  | { kind: "placeholder"; outputPath: string }
+  | { kind: "remote"; provider: KlingProviderKind; taskId: string };
+
+export type KlingPollStepResult =
+  | { status: "processing" }
+  | { status: "succeed"; videoUrl: string }
+  | { status: "failed"; error: string };
 
 function allowPreviewFallback(): boolean {
   return process.env.NODE_ENV !== "production" || process.env.ALLOW_PREVIEW_FALLBACK === "true";
@@ -27,7 +38,13 @@ function getFreshKlingAuthorization(): string | undefined {
   });
 }
 
-export async function generateKlingClip(input: GenerateKlingClipInput): Promise<string> {
+/**
+ * Submit a Kling clip generation task without blocking to poll.
+ * Used by durable Inngest steps so polling sleeps consume zero serverless compute time.
+ */
+export async function submitKlingClipTask(
+  input: GenerateKlingClipInput
+): Promise<KlingSubmissionResult> {
   await mkdir(path.dirname(input.outputPath), { recursive: true });
 
   const initialAuth = getFreshKlingAuthorization();
@@ -38,15 +55,20 @@ export async function generateKlingClip(input: GenerateKlingClipInput): Promise<
         "Kling credentials or KLING_API_BASE_URL are not configured in production."
       );
     }
-    return createPlaceholderClip({
+    const outputPath = await createPlaceholderClip({
       imagePath: input.lastFramePath,
       outputPath: input.outputPath,
       durationSeconds: input.clipSeconds
     });
+    return { kind: "placeholder", outputPath };
   }
 
   if ((process.env.KLING_PROVIDER ?? "image2video") === "skill") {
-    return generateKlingSkillClip(input, getFreshKlingAuthorization);
+    const skillSub = await submitKlingSkillTask(input, getFreshKlingAuthorization);
+    if (skillSub.kind === "placeholder") {
+      return skillSub;
+    }
+    return { kind: "remote", provider: "skill", taskId: skillSub.taskId };
   }
 
   const imageBase64 = await readFrameAsBase64(input.firstFramePath);
@@ -96,7 +118,75 @@ export async function generateKlingClip(input: GenerateKlingClipInput): Promise<
     throw new Error("Kling did not return a task id");
   }
 
-  const videoUrl = await pollKlingTask(baseUrl, taskId, getFreshKlingAuthorization);
+  return { kind: "remote", provider: "image2video", taskId };
+}
+
+/**
+ * Single non-blocking status check for a previously submitted Kling task.
+ */
+export async function checkKlingClipTaskOnce(
+  provider: KlingProviderKind,
+  taskId: string
+): Promise<KlingPollStepResult> {
+  if (provider === "skill") {
+    return checkKlingSkillTaskOnce(taskId, getFreshKlingAuthorization);
+  }
+
+  const baseUrl = process.env.KLING_API_BASE_URL?.replace(/\/$/, "");
+  const authHeader = getFreshKlingAuthorization();
+  if (!baseUrl || !authHeader) {
+    throw new Error("Kling authorization or KLING_API_BASE_URL became unavailable during polling");
+  }
+
+  const response = await fetchWithRetry(
+    `${baseUrl}/v1/videos/image2video/${encodeURIComponent(taskId)}`,
+    {
+      headers: { Authorization: authHeader }
+    },
+    {
+      timeoutMs: 30_000,
+      maxAttempts: 2,
+      baseDelayMs: 1000,
+      label: "kling:pollOnce"
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Kling status failed (${response.status}): ${(await response.text()).slice(0, 400)}`);
+  }
+
+  const payload = (await response.json()) as {
+    data?: {
+      task_status?: string;
+      task_status_msg?: string;
+      task_result?: { videos?: Array<{ url?: string }> };
+    };
+    status?: string;
+    video_url?: string;
+    error?: string;
+  };
+
+  const status = payload.data?.task_status ?? payload.status;
+  if (status === "failed") {
+    return {
+      status: "failed",
+      error: payload.data?.task_status_msg ?? payload.error ?? "Kling task failed"
+    };
+  }
+
+  const videoUrl = payload.data?.task_result?.videos?.[0]?.url ?? payload.video_url;
+  if (videoUrl) {
+    return { status: "succeed", videoUrl };
+  }
+
+  return { status: "processing" };
+}
+
+/**
+ * Download a completed Kling video URL to a local output path.
+ */
+export async function downloadKlingVideo(videoUrl: string, outputPath: string): Promise<string> {
+  await mkdir(path.dirname(outputPath), { recursive: true });
   const videoResponse = await fetchWithRetry(
     videoUrl,
     {},
@@ -111,8 +201,23 @@ export async function generateKlingClip(input: GenerateKlingClipInput): Promise<
     throw new Error(`Kling video download failed: ${videoResponse.status}`);
   }
 
-  await writeFile(input.outputPath, Buffer.from(await videoResponse.arrayBuffer()));
-  return input.outputPath;
+  await writeFile(outputPath, Buffer.from(await videoResponse.arrayBuffer()));
+  return outputPath;
+}
+
+export async function generateKlingClip(input: GenerateKlingClipInput): Promise<string> {
+  if ((process.env.KLING_PROVIDER ?? "image2video") === "skill") {
+    return generateKlingSkillClip(input, getFreshKlingAuthorization);
+  }
+
+  const submission = await submitKlingClipTask(input);
+  if (submission.kind === "placeholder") {
+    return submission.outputPath;
+  }
+
+  const baseUrl = process.env.KLING_API_BASE_URL!.replace(/\/$/, "");
+  const videoUrl = await pollKlingTask(baseUrl, submission.taskId, getFreshKlingAuthorization);
+  return downloadKlingVideo(videoUrl, input.outputPath);
 }
 
 export type PollKlingOptions = {

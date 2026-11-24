@@ -40,10 +40,19 @@ function resolveAuth(authorization?: AuthProvider): string | undefined {
   return typeof authorization === "function" ? authorization() : authorization;
 }
 
-export async function generateKlingSkillClip(
+export type KlingSkillSubmission =
+  | { kind: "placeholder"; outputPath: string }
+  | { kind: "remote"; taskId: string };
+
+export type KlingSkillStatusCheck =
+  | { status: "processing" }
+  | { status: "succeed"; videoUrl: string }
+  | { status: "failed"; error: string };
+
+export async function submitKlingSkillTask(
   input: GenerateKlingSkillClipInput,
   authorization?: AuthProvider
-): Promise<string> {
+): Promise<KlingSkillSubmission> {
   await mkdir(path.dirname(input.outputPath), { recursive: true });
 
   const initialAuth = resolveAuth(authorization);
@@ -51,11 +60,12 @@ export async function generateKlingSkillClip(
     if (!allowPreviewFallback()) {
       throw new Error("Kling Skill credentials or KLING_API_BASE_URL are not configured in production.");
     }
-    return createPlaceholderClip({
+    const outputPath = await createPlaceholderClip({
       imagePath: input.lastFramePath,
       outputPath: input.outputPath,
       durationSeconds: input.clipSeconds
     });
+    return { kind: "placeholder", outputPath };
   }
 
   const firstFrameUrl = await resolvePublicFrameUrl(input.firstFramePath, input.jobId);
@@ -121,7 +131,78 @@ export async function generateKlingSkillClip(
     throw new Error("Kling Skill did not return a task id");
   }
 
-  const videoUrl = await pollKlingSkillTask(baseUrl, taskId, authorization ?? initialAuth);
+  return { kind: "remote", taskId };
+}
+
+export async function checkKlingSkillTaskOnce(
+  taskId: string,
+  authorization?: AuthProvider
+): Promise<KlingSkillStatusCheck> {
+  const baseUrl = process.env.KLING_API_BASE_URL?.replace(/\/$/, "");
+  const authHeader = resolveAuth(authorization);
+  if (!baseUrl || !authHeader) {
+    throw new Error("Kling Skill authorization or KLING_API_BASE_URL is unavailable");
+  }
+
+  const statusPath = process.env.KLING_SKILL_STATUS_PATH ?? "/v1/videos/{task_id}";
+  const response = await fetchWithRetry(
+    buildUrl(baseUrl, statusPath.replace("{task_id}", encodeURIComponent(taskId))),
+    {
+      headers: { Authorization: authHeader }
+    },
+    {
+      timeoutMs: 30_000,
+      maxAttempts: 2,
+      baseDelayMs: 1000,
+      label: "klingSkill:pollOnce"
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Kling Skill status failed (${response.status}): ${(await response.text()).slice(0, 400)}`);
+  }
+
+  const payload = (await response.json()) as UnknownJson;
+  const status = findString(payload, ["status", "data.status"]);
+  if (status === "failed") {
+    return {
+      status: "failed",
+      error: findString(payload, ["error", "message", "data.error", "data.message"]) ?? "Kling Skill task failed"
+    };
+  }
+
+  const videoUrl = findString(payload, [
+    "video_url",
+    "url",
+    "output.video_url",
+    "output.url",
+    "result.video_url",
+    "result.url",
+    "data.video_url",
+    "data.url",
+    "data.output.video_url",
+    "data.output.url",
+    "data.result.video_url",
+    "data.result.url"
+  ]);
+  if (videoUrl) {
+    return { status: "succeed", videoUrl };
+  }
+  return { status: "processing" };
+}
+
+export async function generateKlingSkillClip(
+  input: GenerateKlingSkillClipInput,
+  authorization?: AuthProvider
+): Promise<string> {
+  const submission = await submitKlingSkillTask(input, authorization);
+  if (submission.kind === "placeholder") {
+    return submission.outputPath;
+  }
+
+  const baseUrl = process.env.KLING_API_BASE_URL!.replace(/\/$/, "");
+  const initialAuth = resolveAuth(authorization)!;
+  const videoUrl = await pollKlingSkillTask(baseUrl, submission.taskId, authorization ?? initialAuth);
   const videoResponse = await fetchWithRetry(
     videoUrl,
     {},

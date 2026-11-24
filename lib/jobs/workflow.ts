@@ -4,7 +4,12 @@ import { randomUUID } from "node:crypto";
 import { runWithConcurrency } from "../http/fetchWithRetry";
 import { renderFinalVideo } from "../video/ffmpeg";
 import { generateInteriorFrame, generateNanoBananaPromptForImage } from "../providers/nanoBanana";
-import { generateKlingClip } from "../providers/kling";
+import {
+  downloadKlingVideo,
+  generateKlingClip,
+  submitKlingClipTask,
+  type KlingProviderKind,
+} from "../providers/kling";
 import { buildImagePromptForStyle, getInteriorStylePrompt, FULL_STRUCTURE_LOCK_PREAMBLE, SHELL_LOCK_PREAMBLE } from "../prompts/interiorStyles";
 import { getJob, mutateJob, updateJobStep } from "./store";
 import { judgeAllFrames, judgeFrameAndStore } from "./judging";
@@ -446,6 +451,322 @@ export async function regenerateFrame(
     } else if (regenWorkDir !== job.rootDir) {
       await unlink(localFramePath).catch(() => {});
     }
+  }
+}
+
+// ── Atomic step primitives for durable queue execution (Inngest) ─────────────
+
+export async function processSingleImageFrame(
+  jobId: string,
+  index: number
+): Promise<{ storedFramePath: string; skipped: boolean }> {
+  const job = await getJob(jobId);
+  if (!job) throw new Error(`Job ${jobId} was not found`);
+
+  if (await isFrameCheckpointReusable(job, index)) {
+    return { storedFramePath: job.generatedFrames[index], skipped: true };
+  }
+
+  const config = job.config ?? DEFAULT_WORKFLOW_CONFIG;
+  const styleId = config.styleId ?? config.style;
+  const workDir = isR2Configured()
+    ? path.join("/tmp", `${jobId}-step-img-${index}-${randomUUID().slice(0, 8)}`)
+    : job.rootDir;
+
+  try {
+    const sourceLocalPath = await resolveLocalSourceImage(job, index, workDir);
+
+    const promptStep = job.steps.find((s) => s.kind === "prompt" && s.index === index);
+    let framePrompt = promptStep?.status === "complete" ? job.framePrompts?.[index] : undefined;
+
+    if (!framePrompt) {
+      await updateJobStep(jobId, "prompt", index, "running");
+      const stylePrompt = buildImagePromptForStyle(styleId);
+      const userRequest = job.userEditRequests?.[index];
+      framePrompt = await generateNanoBananaPromptForImage({
+        sourceImagePath: sourceLocalPath,
+        stylePrompt,
+        userRequest,
+      });
+      await mutateJob(jobId, (current) => {
+        const now = new Date().toISOString();
+        const nextPrompts = [...(current.framePrompts ?? [])];
+        while (nextPrompts.length < current.sourceImages.length) nextPrompts.push("");
+        nextPrompts[index] = framePrompt!;
+        return {
+          framePrompts: nextPrompts,
+          steps: current.steps.map((s) =>
+            s.kind === "prompt" && s.index === index
+              ? { ...s, status: "complete" as const, updatedAt: now }
+              : s
+          ),
+        };
+      });
+    }
+
+    await updateJobStep(jobId, "image", index, "running");
+    const localFramePath = path.join(workDir, "generated", `frame-${index + 1}.png`);
+    await mkdir(path.dirname(localFramePath), { recursive: true });
+    await generateInteriorFrame({
+      jobId,
+      sourceImagePath: sourceLocalPath,
+      prompt: `${framePrompt}${FULL_STRUCTURE_LOCK_PREAMBLE}`,
+      aspectRatio: config.aspectRatio,
+      resolution: config.resolution,
+      outputPath: localFramePath,
+    });
+
+    let storedFramePath = localFramePath;
+    if (isR2Configured()) {
+      const key = storageKey(jobId, `generated/frame-${index + 1}.png`);
+      await uploadToStorage(key, localFramePath, "image/png");
+      storedFramePath = key;
+    }
+
+    await mutateJob(jobId, (current) => {
+      const now = new Date().toISOString();
+      const nextFrames = [...current.generatedFrames];
+      while (nextFrames.length < current.sourceImages.length) nextFrames.push("");
+      nextFrames[index] = storedFramePath;
+      return {
+        generatedFrames: nextFrames,
+        steps: current.steps.map((s) =>
+          s.kind === "image" && s.index === index
+            ? { ...s, status: "complete" as const, outputPath: storedFramePath, updatedAt: now }
+            : s
+        ),
+      };
+    });
+
+    return { storedFramePath, skipped: false };
+  } catch (error) {
+    await updateJobStep(jobId, "image", index, "failed").catch(() => {});
+    throw error;
+  } finally {
+    await cleanupTempDir(workDir);
+  }
+}
+
+export async function judgeSingleImageFrame(jobId: string, index: number): Promise<void> {
+  const job = await getJob(jobId);
+  if (!job) return;
+  if (job.frameJudgements?.[index]) return;
+  const storedFrame = job.generatedFrames?.[index];
+  if (!storedFrame) return;
+
+  const workDir = isR2Configured()
+    ? path.join("/tmp", `${jobId}-step-judge-${index}-${randomUUID().slice(0, 8)}`)
+    : job.rootDir;
+
+  try {
+    const sourceLocalPath = await resolveLocalSourceImage(job, index, workDir);
+    let frameLocalPath = storedFrame;
+    if (isR2Configured()) {
+      frameLocalPath = path.join(workDir, "generated", `frame-${index + 1}.png`);
+      await downloadFromStorage(storedFrame, frameLocalPath);
+    }
+    await judgeFrameAndStore(jobId, index, sourceLocalPath, frameLocalPath);
+  } finally {
+    await cleanupTempDir(workDir);
+  }
+}
+
+export type SubmitClipStepResult =
+  | { skipped: true; storedClipPath: string }
+  | { skipped: false; kind: "placeholder"; storedClipPath: string }
+  | { skipped: false; kind: "remote"; provider: KlingProviderKind; taskId: string };
+
+export async function submitClipGenerationStep(
+  jobId: string,
+  index: number
+): Promise<SubmitClipStepResult> {
+  const job = await getJob(jobId);
+  if (!job) throw new Error(`Job ${jobId} was not found`);
+
+  if (await isClipCheckpointReusable(job, index)) {
+    return { skipped: true, storedClipPath: job.generatedClips[index] };
+  }
+
+  const frameKeyOrPath = job.generatedFrames[index];
+  if (!frameKeyOrPath) throw new Error(`Missing generated frame at index ${index}`);
+
+  const config = job.config ?? DEFAULT_WORKFLOW_CONFIG;
+  const motionPrompt = buildKlingMotionPrompt(config.motion);
+  const workDir = isR2Configured()
+    ? path.join("/tmp", `${jobId}-step-clip-sub-${index}-${randomUUID().slice(0, 8)}`)
+    : job.rootDir;
+
+  try {
+    const sourceLocalPath = await resolveLocalSourceImage(job, index, workDir);
+    let frameLocalPath = frameKeyOrPath;
+    if (isR2Configured()) {
+      frameLocalPath = path.join(workDir, "generated", `frame-${index + 1}.png`);
+      await downloadFromStorage(frameKeyOrPath, frameLocalPath);
+    }
+
+    await updateJobStep(jobId, "video", index, "running");
+    const localClipPath = path.join(workDir, "clips", `clip-${index + 1}.mp4`);
+    await mkdir(path.dirname(localClipPath), { recursive: true });
+
+    const submission = await submitKlingClipTask({
+      jobId,
+      firstFramePath: sourceLocalPath,
+      lastFramePath: frameLocalPath,
+      prompt: motionPrompt,
+      aspectRatio: config.aspectRatio,
+      clipSeconds: config.clipSeconds,
+      outputPath: localClipPath,
+    });
+
+    if (submission.kind === "placeholder") {
+      let storedClipPath = submission.outputPath;
+      if (isR2Configured()) {
+        const key = storageKey(jobId, `clips/clip-${index + 1}.mp4`);
+        await uploadToStorage(key, submission.outputPath, "video/mp4");
+        storedClipPath = key;
+      }
+
+      await mutateJob(jobId, (current) => {
+        const now = new Date().toISOString();
+        const nextClips = [...current.generatedClips];
+        while (nextClips.length < current.sourceImages.length) nextClips.push("");
+        nextClips[index] = storedClipPath;
+        return {
+          generatedClips: nextClips,
+          steps: current.steps.map((s) =>
+            s.kind === "video" && s.index === index
+              ? { ...s, status: "complete" as const, outputPath: storedClipPath, updatedAt: now }
+              : s
+          ),
+        };
+      });
+
+      return { skipped: false, kind: "placeholder", storedClipPath };
+    }
+
+    return {
+      skipped: false,
+      kind: "remote",
+      provider: submission.provider,
+      taskId: submission.taskId,
+    };
+  } catch (error) {
+    await updateJobStep(jobId, "video", index, "failed").catch(() => {});
+    throw error;
+  } finally {
+    await cleanupTempDir(workDir);
+  }
+}
+
+export async function finalizeClipDownloadStep(
+  jobId: string,
+  index: number,
+  videoUrl: string
+): Promise<{ storedClipPath: string }> {
+  const job = await getJob(jobId);
+  if (!job) throw new Error(`Job ${jobId} was not found`);
+
+  if (await isClipCheckpointReusable(job, index)) {
+    return { storedClipPath: job.generatedClips[index] };
+  }
+
+  const workDir = isR2Configured()
+    ? path.join("/tmp", `${jobId}-step-clip-dl-${index}-${randomUUID().slice(0, 8)}`)
+    : job.rootDir;
+
+  try {
+    const localClipPath = path.join(workDir, "clips", `clip-${index + 1}.mp4`);
+    await downloadKlingVideo(videoUrl, localClipPath);
+
+    let storedClipPath = localClipPath;
+    if (isR2Configured()) {
+      const key = storageKey(jobId, `clips/clip-${index + 1}.mp4`);
+      await uploadToStorage(key, localClipPath, "video/mp4");
+      storedClipPath = key;
+    }
+
+    await mutateJob(jobId, (current) => {
+      const now = new Date().toISOString();
+      const nextClips = [...current.generatedClips];
+      while (nextClips.length < current.sourceImages.length) nextClips.push("");
+      nextClips[index] = storedClipPath;
+      return {
+        generatedClips: nextClips,
+        steps: current.steps.map((s) =>
+          s.kind === "video" && s.index === index
+            ? { ...s, status: "complete" as const, outputPath: storedClipPath, updatedAt: now }
+            : s
+        ),
+      };
+    });
+
+    return { storedClipPath };
+  } catch (error) {
+    await updateJobStep(jobId, "video", index, "failed").catch(() => {});
+    throw error;
+  } finally {
+    await cleanupTempDir(workDir);
+  }
+}
+
+export async function finalizeVideoRenderStep(jobId: string): Promise<{ finalVideoPath: string }> {
+  const job = await getJob(jobId);
+  if (!job) throw new Error(`Job ${jobId} was not found`);
+
+  const config = job.config ?? DEFAULT_WORKFLOW_CONFIG;
+  const workDir = isR2Configured()
+    ? path.join("/tmp", `${jobId}-step-render-${randomUUID().slice(0, 8)}`)
+    : job.rootDir;
+
+  try {
+    let finalVideoPath: string;
+    if (job.generatedClips.length === 1) {
+      finalVideoPath = job.generatedClips[0];
+    } else {
+      await updateJobStep(jobId, "render", 0, "running");
+      const localClipPaths: string[] = [];
+      for (let i = 0; i < job.generatedClips.length; i += 1) {
+        const storedClip = job.generatedClips[i];
+        if (!storedClip) throw new Error(`Missing generated clip at index ${i}`);
+        if (isR2Configured()) {
+          const localClipPath = path.join(workDir, "clips", `clip-${i + 1}.mp4`);
+          await downloadFromStorage(storedClip, localClipPath);
+          localClipPaths.push(localClipPath);
+        } else {
+          localClipPaths.push(storedClip);
+        }
+      }
+
+      const localFinalPath = path.join(workDir, "final.mp4");
+      await renderFinalVideo({
+        clipPaths: localClipPaths,
+        outputPath: localFinalPath,
+        clipSeconds: config.clipSeconds,
+        width: config.outputWidth,
+        height: config.outputHeight,
+      });
+
+      if (isR2Configured()) {
+        const key = storageKey(jobId, "final.mp4");
+        await uploadToStorage(key, localFinalPath, "video/mp4");
+        finalVideoPath = key;
+      } else {
+        finalVideoPath = localFinalPath;
+      }
+
+      await updateJobStep(jobId, "render", 0, "complete", finalVideoPath);
+    }
+
+    const finalJob = await mutateJob(jobId, () => ({
+      finalVideoPath,
+      status: "complete",
+      error: undefined,
+    }));
+    if (!finalJob) throw new Error(`Job ${jobId} disappeared during render step`);
+
+    return { finalVideoPath };
+  } finally {
+    await cleanupTempDir(workDir);
   }
 }
 

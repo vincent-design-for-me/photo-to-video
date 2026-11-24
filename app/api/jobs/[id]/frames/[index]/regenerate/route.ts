@@ -1,7 +1,7 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { dispatchFrameRegeneration } from "../../../../../../../lib/inngest/dispatch";
 import { requireOwnedJob } from "../../../../../../../lib/jobs/ownership";
-import { claimFrameRegeneration } from "../../../../../../../lib/jobs/store";
-import { regenerateFrame } from "../../../../../../../lib/jobs/workflow";
+import { claimFrameRegeneration, mutateJob } from "../../../../../../../lib/jobs/store";
 
 export const maxDuration = 300;
 
@@ -34,13 +34,23 @@ export async function POST(
     return new NextResponse(claim.reason ?? "Frame cannot be regenerated", { status: 409 });
   }
 
-  after(async () => {
-    try {
-      await regenerateFrame(id, frameIndex, appendText, { alreadyClaimed: true });
-    } catch (error) {
-      console.error(`Regen frame ${frameIndex} for job ${id}:`, error);
-    }
-  });
-
-  return NextResponse.json({ id, index: frameIndex, status: "regenerating" }, { status: 202 });
+  try {
+    const dispatched = await dispatchFrameRegeneration(id, frameIndex, appendText, job.userId);
+    return NextResponse.json(
+      { id, index: frameIndex, status: "regenerating", queue: dispatched.mode },
+      { status: 202 }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to enqueue frame regeneration";
+    const now = new Date().toISOString();
+    await mutateJob(id, (current) => ({
+      error: message,
+      steps: current.steps.map((s) =>
+        s.kind === "image" && s.index === frameIndex
+          ? { ...s, status: "failed" as const, updatedAt: now }
+          : s
+      ),
+    })).catch(() => {});
+    return new NextResponse(message, { status: 502 });
+  }
 }

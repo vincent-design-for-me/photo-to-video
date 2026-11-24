@@ -1,7 +1,7 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { dispatchImagePhase, dispatchVideoPhase } from "../../../../../lib/inngest/dispatch";
 import { requireOwnedJob } from "../../../../../lib/jobs/ownership";
-import { claimJobExecution } from "../../../../../lib/jobs/store";
-import { runImagePhase, runVideoPhase } from "../../../../../lib/jobs/workflow";
+import { claimJobExecution, mutateJob } from "../../../../../lib/jobs/store";
 
 export const maxDuration = 300;
 
@@ -30,15 +30,15 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       const step = job.steps.find((s) => s.kind === "image" && s.index === index);
       return step?.status === "complete" && Boolean(job.generatedFrames?.[index]);
     });
-  const phase = framesComplete ? runVideoPhase : runImagePhase;
 
-  after(async () => {
-    try {
-      await phase(id);
-    } catch (error) {
-      console.error(`[run] job ${id} failed:`, error);
-    }
-  });
-
-  return NextResponse.json({ id, status: "running" }, { status: 202 });
+  try {
+    const dispatched = framesComplete
+      ? await dispatchVideoPhase(id, job.userId)
+      : await dispatchImagePhase(id, job.userId);
+    return NextResponse.json({ id, status: "running", queue: dispatched.mode }, { status: 202 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to enqueue job";
+    await mutateJob(id, () => ({ status: "failed", error: message })).catch(() => {});
+    return new NextResponse(message, { status: 502 });
+  }
 }
