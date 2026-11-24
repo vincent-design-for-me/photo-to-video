@@ -99,22 +99,29 @@ class D1HttpPreparedStatement implements D1PreparedStatementLike {
   async run<T = Record<string, unknown>>(): Promise<D1Result<T>> {
     return this.all<T>();
   }
+
+  async raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<T[]> {
+    return this.#db.queryRaw<T>(this.sql, this.params, options);
+  }
 }
 
 /**
  * Cloudflare D1 REST API client implementing the standard D1Database interface
- * (`prepare`, `batch`, `exec`), so it works natively with BOTH Better Auth's
- * built-in `D1SqliteDialect` and our `store.d1.ts` job store from Vercel Node.js.
+ * (`prepare`, `batch`, `exec`, and statement `.raw()`), so it works natively with
+ * Better Auth's `D1SqliteDialect`, Drizzle ORM (`drizzle-orm/d1`), and Vercel Node.js.
  */
 export class D1HttpDatabase implements D1DatabaseLike {
   readonly #endpoint: string;
+  readonly #rawEndpoint: string;
   readonly #apiToken: string;
   readonly #fetchImpl?: typeof fetch;
 
   constructor(config: D1Config, options?: { fetchImpl?: typeof fetch }) {
-    this.#endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+    const base = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
       config.accountId
-    )}/d1/database/${encodeURIComponent(config.databaseId)}/query`;
+    )}/d1/database/${encodeURIComponent(config.databaseId)}`;
+    this.#endpoint = `${base}/query`;
+    this.#rawEndpoint = `${base}/raw`;
     this.#apiToken = config.apiToken;
     this.#fetchImpl = options?.fetchImpl;
   }
@@ -162,6 +169,51 @@ export class D1HttpDatabase implements D1DatabaseLike {
       success: first?.success ?? true,
       meta: first?.meta ?? {},
     };
+  }
+
+  async queryRaw<T = unknown[]>(
+    sql: string,
+    params: unknown[] = [],
+    options?: { columnNames?: boolean }
+  ): Promise<T[]> {
+    const normalizedParams = params.map(normalizeD1Param);
+    const response = await fetchWithRetry(
+      this.#rawEndpoint,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.#apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sql,
+          params: normalizedParams,
+        }),
+      },
+      {
+        timeoutMs: 20_000,
+        maxAttempts: 3,
+        baseDelayMs: 400,
+        maxDelayMs: 4000,
+        label: "cloudflare:d1:raw",
+        fetchImpl: this.#fetchImpl,
+      }
+    );
+
+    const payload = (await response.json().catch(() => null)) as D1RawApiResponse | null;
+    if (!response.ok || !payload?.success) {
+      const errText =
+        payload?.errors?.map((e) => `${e.code ?? ""}: ${e.message ?? "unknown"}`).join("; ") ||
+        `HTTP ${response.status}`;
+      throw new Error(`Cloudflare D1 raw query failed: ${errText}`);
+    }
+
+    const first = payload.result?.[0];
+    const rows = first?.results?.rows ?? [];
+    if (options?.columnNames && first?.results?.columns) {
+      return [first.results.columns, ...rows] as T[];
+    }
+    return rows as T[];
   }
 
   async batch<T = Record<string, unknown>>(
