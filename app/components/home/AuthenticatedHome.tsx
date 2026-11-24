@@ -1,40 +1,140 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Lightbox } from "./Lightbox";
-import { MouseParticles } from "./MouseParticles";
-import { UploadCard } from "./UploadCard";
+import { STYLE_CARDS } from "./uploadConfig";
 import { useUploadJob } from "./useUploadJob";
+import { WorkspaceCanvas } from "./workspace/WorkspaceCanvas";
+import { WorkspaceRail } from "./workspace/WorkspaceRail";
+import type { ReusableAsset, WorkspaceJobSummary } from "./workspace/types";
+import styles from "./AuthenticatedHome.module.css";
 
 export function AuthenticatedHome() {
-  const job = useUploadJob();
+  const [jobs, setJobs] = useState<WorkspaceJobSummary[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [activeTab, setActiveTab] = useState<"history" | "guide">("guide");
+  const [pickingStyle, setPickingStyle] = useState(false);
+  const initialTabChosenRef = useRef(false);
+  const fetchInFlightRef = useRef(false);
+
+  const loadJobs = useCallback(async () => {
+    if (fetchInFlightRef.current) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+    fetchInFlightRef.current = true;
+    try {
+      const response = await fetch("/api/jobs", { cache: "no-store" });
+      if (!response.ok) return;
+      const data = (await response.json()) as { jobs?: WorkspaceJobSummary[] };
+      const fetched = data.jobs ?? [];
+      setJobs(fetched);
+      if (!initialTabChosenRef.current) {
+        initialTabChosenRef.current = true;
+        setActiveTab(fetched.length > 0 ? "history" : "guide");
+      }
+    } catch {
+      // Keep current jobs visible on transient network blips
+    } finally {
+      fetchInFlightRef.current = false;
+      setLoadingJobs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadJobs();
+  }, [loadJobs]);
+
+  const hasActiveJob = useMemo(
+    () => jobs.some((j) => j.status === "queued" || j.status === "running"),
+    [jobs]
+  );
+
+  useEffect(() => {
+    if (!hasActiveJob) return;
+    const timer = setInterval(loadJobs, 3500);
+    const onVisible = () => {
+      if (!document.hidden) loadJobs();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [hasActiveJob, loadJobs]);
+
+  const job = useUploadJob({
+    onJobCreated: (created) => {
+      const styleInfo = STYLE_CARDS.find((s) => s.id === created.styleId);
+      const now = new Date().toISOString();
+      const optimisticJob: WorkspaceJobSummary = {
+        id: created.id,
+        status: created.runError ? "failed" : "running",
+        createdAt: now,
+        updatedAt: now,
+        sourceImages: Array.from({ length: created.photoCount }, (_, idx) => ({
+          name: `photo-${idx + 1}.jpg`,
+          path: "",
+        })),
+        generatedFrames: [],
+        generatedClips: [],
+        error: created.runError,
+        config: {
+          styleId: created.styleId,
+          style: styleInfo?.name ?? created.styleId,
+          aspectRatio: created.aspectRatio,
+          resolution: created.resolution,
+        },
+        steps: [],
+        optimistic: true,
+      };
+      setJobs((prev) => [optimisticJob, ...prev.filter((j) => j.id !== created.id)]);
+      setPickingStyle(false);
+      setActiveTab("history");
+      initialTabChosenRef.current = true;
+      // Refresh real server state shortly after inserting the optimistic placeholder
+      setTimeout(() => {
+        loadJobs();
+      }, 1200);
+    },
+  });
+
+  // Collect up to 12 recent source photos across past jobs for quick reuse
+  const reusableAssets = useMemo<ReusableAsset[]>(() => {
+    const out: ReusableAsset[] = [];
+    for (const item of jobs) {
+      if (item.optimistic) continue;
+      for (let i = 0; i < item.sourceImages.length; i += 1) {
+        out.push({
+          id: `${item.id}:${i}`,
+          url: `/api/jobs/${item.id}/sources/${i}`,
+          name: item.sourceImages[i].name,
+          jobStyle: item.config?.style || "Past project",
+        });
+        if (out.length >= 12) return out;
+      }
+    }
+    return out;
+  }, [jobs]);
 
   return (
-    <div className="app-page">
-      <img className="landing-hero-bg" src="/auth-app-bg.jpg" alt="" aria-hidden="true" />
-      <MouseParticles />
+    <div className={styles.shell}>
+      <main className={styles.grid}>
+        <WorkspaceRail
+          job={job}
+          pickingStyle={pickingStyle}
+          onToggleStylePicker={() => setPickingStyle((prev) => !prev)}
+          reusableAssets={reusableAssets}
+        />
 
-      <main className="hero-main page-enter">
-        <section className="hero">
-          <span className="badge">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="7" width="18" height="14" rx="2.5" />
-              <path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7" />
-              <polygon points="10.5,12 10.5,17 15.5,14.5" fill="currentColor" stroke="none" />
-            </svg>
-            Your AI Video Starts Here
-          </span>
-          <h1>
-            <span className="hero-soft">Create Videos Instantly</span>
-            <br />
-            <span className="hero-soft">with a </span><strong>Single Upload</strong>
-          </h1>
-          <p className="hero-lede">
-            Upload room photos. Our AI restyles, animates, and assembles a polished vertical
-            video — perfect for listings, short‑form ads, and portfolio pieces.
-          </p>
-        </section>
-
-        <UploadCard job={job} />
+        <WorkspaceCanvas
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          pickingStyle={pickingStyle}
+          selectedStyle={job.selectedStyle}
+          onSelectStyle={job.setSelectedStyle}
+          onCloseStylePicker={() => setPickingStyle(false)}
+          jobs={jobs}
+          loadingJobs={loadingJobs}
+        />
       </main>
 
       {job.lightboxIndex !== null && job.previewUrls[job.lightboxIndex] && (

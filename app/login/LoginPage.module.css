@@ -1,0 +1,37 @@
+.password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-wrap.password-wrap .password-input {
+  padding-right: var(--space-xxl);
+}
+
+.toggle-btn {
+  position: absolute;
+  right: var(--space-xs);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--panel);
+  opacity: 0.52;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 150ms ease, background 150ms ease;
+}
+
+.toggle-btn:hover,
+.toggle-btn:focus-visible {
+  opacity: 0.94;
+  background: rgb(255 255 255 / 8%);
+  outline: none;
+}

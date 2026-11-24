@@ -6,7 +6,7 @@ export function ControlRow({
   hint,
 }: {
   label: string;
-  options: { value: string; label: string }[];
+  options: readonly { value: string; label: string }[];
   value: string;
   onChange: (v: string) => void;
   hint?: string | null;

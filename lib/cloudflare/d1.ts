@@ -26,6 +26,19 @@ type D1ApiResponse<T = Record<string, unknown>> = {
   }>;
 };
 
+type D1RawApiResponse = {
+  success: boolean;
+  errors?: Array<{ code?: number; message?: string }>;
+  result?: Array<{
+    results?: {
+      columns?: string[];
+      rows?: unknown[][];
+    };
+    success?: boolean;
+    meta?: D1ResultMeta;
+  }>;
+};
+
 export type D1PreparedStatementLike = {
   readonly sql: string;
   readonly params: unknown[];
@@ -33,6 +46,7 @@ export type D1PreparedStatementLike = {
   all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
   first<T = Record<string, unknown>>(colName?: string): Promise<T | null>;
   run<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<T[]>;
 };
 
 export type D1DatabaseLike = {

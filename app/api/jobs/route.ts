@@ -2,7 +2,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { isCloudMode } from "../../../lib/cloudflare/config";
-import { buildJobAsset, createJob } from "../../../lib/jobs/store";
+import { buildJobAsset, createJob, getJobsByUser } from "../../../lib/jobs/store";
 import { requireAuthenticatedUserId } from "../../../lib/jobs/ownership";
 import {
   deleteFromStorage,
@@ -27,6 +27,26 @@ type DirectCreatePayload = {
   resolution?: unknown;
   editRequests?: unknown;
 };
+
+export async function GET() {
+  const auth = await requireAuthenticatedUserId();
+  if (auth.response) {
+    return auth.response;
+  }
+  if (!auth.userId) {
+    return NextResponse.json({ jobs: [] });
+  }
+
+  try {
+    const jobs = await getJobsByUser(auth.userId);
+    return NextResponse.json({
+      jobs: jobs.map((job) => ({ ...job, rootDir: undefined })),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load jobs";
+    return new NextResponse(message, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   if (!isCloudMode()) {

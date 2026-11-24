@@ -1,0 +1,28 @@
+.shell {
+  min-height: 100vh;
+  background-color: var(--canvas);
+  color: var(--ink);
+  padding: var(--space-section) var(--space-base) var(--space-base);
+}
+
+.grid {
+  max-width: 1408px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: var(--space-base);
+  height: calc(100vh - 112px);
+  min-height: 620px;
+}
+
+@media (width <= 1023px) {
+  .shell {
+    padding: var(--space-section) var(--space-sm) var(--space-lg);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+  }
+}

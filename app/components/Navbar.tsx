@@ -63,6 +63,11 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
+    // Light-editorial studio surfaces (authenticated workspace) always use dark-ink header.
+    if (pathname === "/" && Boolean(user)) {
+      setScrolled(true);
+      return;
+    }
     if (pathname !== "/") { setScrolled(false); return; }
     function onScroll() {
       const target = document.getElementById("how-it-works");
@@ -72,7 +77,7 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
-  }, [pathname]);
+  }, [pathname, user]);
 
   const isAuth = pathname.startsWith("/login") || pathname.startsWith("/signup") ||
     pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password");
@@ -91,7 +96,6 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/library", label: "Library" },
-    ...(user ? [{ href: "/history", label: "History" }] : []),
   ];
 
   return (
@@ -116,7 +120,7 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
             {open && (
               <div className="user-dropdown">
                 <div className="user-dropdown-email">{user.email}</div>
-                <Link href="/history" onClick={() => setOpen(false)}>My Videos</Link>
+                <Link href="/" onClick={() => setOpen(false)}>My Videos</Link>
                 <button className="danger" onClick={handleSignOut}>Sign Out</button>
               </div>
             )}
