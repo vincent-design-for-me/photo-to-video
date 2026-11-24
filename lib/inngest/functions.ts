@@ -193,7 +193,8 @@ export const regenerateFrameFunction = inngest.createFunction(
     name: "Photo-to-Video: Regenerate Single Frame",
     triggers: [jobFrameRegenerateRequested],
     retries: 2,
-    concurrency: [{ limit: QUEUE_GLOBAL_CONCURRENCY + 1 }],
+    // Inngest Free plan caps per-function concurrency at 5.
+    concurrency: [{ limit: QUEUE_GLOBAL_CONCURRENCY }],
     onFailure: async ({ event, error }) => {
       const data = event.data.event.data;
       if (!data?.jobId || typeof data.frameIndex !== "number") return;
