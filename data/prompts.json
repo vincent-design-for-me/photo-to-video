@@ -1,0 +1,272 @@
+[
+  {
+    "id": "prompt-001",
+    "title": "Minimalist SaaS dashboard with dark sidebar",
+    "category": "UI & Interfaces",
+    "style": "UI",
+    "scene": "Tech",
+    "prompt": "A clean SaaS dashboard interface with a dark charcoal sidebar, white content area, and subtle card shadows. Navigation icons on the left with active state highlighted in indigo, data visualization charts center-stage, and a top bar with search and user avatar. Pixel-perfect, 2x retina resolution, no lens distortion.",
+    "thumbnail": "https://picsum.photos/seed/prompt-001/800/450"
+  },
+  {
+    "id": "prompt-002",
+    "title": "Infographic: Global supply chain flow",
+    "category": "Charts & Infographics",
+    "style": "Infographic",
+    "scene": "Commerce",
+    "prompt": "A full-color illustrated infographic showing global supply chain flow from raw material extraction to consumer delivery. Clean sans-serif typography, pastel country fill colors on a world map, numbered steps connected by flowing arrows. Flat design with subtle drop shadows, 16:9 format, white background.",
+    "thumbnail": "https://picsum.photos/seed/prompt-002/800/450"
+  },
+  {
+    "id": "prompt-003",
+    "title": "Vintage jazz concert poster — New Orleans",
+    "category": "Posters & Typography",
+    "style": "Poster",
+    "scene": "Creative",
+    "prompt": "A vintage concert poster for a jazz festival in New Orleans, warm sepia and burnt-orange color palette, hand-lettered headline 'JAZZ FEST' in an art-deco serif, illustrated trumpet player silhouette. Distressed paper texture overlay, slight halftone grain, framed by ornate borders. Print-ready 18×24 inches.",
+    "thumbnail": "https://picsum.photos/seed/prompt-003/800/450"
+  },
+  {
+    "id": "prompt-004",
+    "title": "Luxury perfume bottle on marble surface",
+    "category": "Products & E-commerce",
+    "style": "Product",
+    "scene": "Fashion",
+    "prompt": "A luxury glass perfume bottle photographed on white Carrara marble, soft studio lighting with a single diffused key light from the upper left casting a long gradient shadow. The bottle cap is rose-gold, the liquid amber-tinted. Shot at f/4 with shallow depth of field, 85mm lens equivalent. No background clutter, pure white ambient.",
+    "thumbnail": "https://picsum.photos/seed/prompt-004/800/450"
+  },
+  {
+    "id": "prompt-005",
+    "title": "Tech startup logo mark — geometric owl",
+    "category": "Brand & Logos",
+    "style": "Brand",
+    "scene": "Tech",
+    "prompt": "A geometric logo mark of an owl built from clean isometric triangles and hexagons, monochrome in deep navy blue on white. The owl's eyes are two concentric circles suggesting a lens or aperture. Minimal, scalable vector style, suitable for a technology company. No gradients, no effects — pure flat geometry.",
+    "thumbnail": "https://picsum.photos/seed/prompt-005/800/450"
+  },
+  {
+    "id": "prompt-006",
+    "title": "Brutalist concrete apartment facade",
+    "category": "Architecture & Spaces",
+    "style": "Architecture",
+    "scene": "Creative",
+    "prompt": "A dramatic wide-angle photograph of a brutalist concrete apartment building facade, harsh midday sunlight casting deep geometric shadows from the protruding balconies. Raw béton brut texture, repeating grid of balcony openings, overcast sky behind. Shot upward from street level, 24mm tilt-shift lens, ultra-high contrast.",
+    "thumbnail": "https://picsum.photos/seed/prompt-006/800/450"
+  },
+  {
+    "id": "prompt-007",
+    "title": "Portrait: street photographer in Tokyo rain",
+    "category": "Photography & Realism",
+    "style": "Photography",
+    "scene": "Travel",
+    "prompt": "A cinematic portrait of a street photographer standing under a transparent umbrella in a rain-soaked Tokyo alley at night. Neon reflections on the wet asphalt, bokeh from string lights overhead, the camera raised mid-shot. Shot on 50mm f/1.4, ISO 3200, warm tungsten neon cast against cool blue rain. Documentary realism.",
+    "thumbnail": "https://picsum.photos/seed/prompt-007/800/450"
+  },
+  {
+    "id": "prompt-008",
+    "title": "Whimsical forest cottage illustration",
+    "category": "Illustration & Art",
+    "style": "Illustration",
+    "scene": "Story",
+    "prompt": "A detailed children's book illustration of a tiny moss-covered cottage nestled at the base of a giant oak tree, warm golden light spilling from circular windows, a stone chimney with curling smoke. Lush forest surroundings with oversized mushrooms, fireflies, and a winding stone path. Gouache-style textures, soft pastel palette, Claude Monet impressionistic influence.",
+    "thumbnail": "https://picsum.photos/seed/prompt-008/800/450"
+  },
+  {
+    "id": "prompt-009",
+    "title": "Character: cyberpunk samurai warrior",
+    "category": "Characters & People",
+    "style": "Character",
+    "scene": "Creative",
+    "prompt": "A full-body character design of a cyberpunk samurai standing in a rain-soaked neon-lit alley. Traditional lacquered armor panels fused with glowing circuitry inlays, a katana whose blade pulses with blue plasma light. Face obscured by a matte-black oni mask with LED eyes. Concept art style, dark moody palette with electric teal and hot pink accents, dramatic rim light.",
+    "thumbnail": "https://picsum.photos/seed/prompt-009/800/450"
+  },
+  {
+    "id": "prompt-010",
+    "title": "Coastal café terrace at golden hour",
+    "category": "Scenes & Storytelling",
+    "style": "Scenes",
+    "scene": "Travel",
+    "prompt": "A sun-drenched café terrace perched on a Mediterranean cliff overlooking turquoise water, terracotta floor tiles, white-linen draped chairs, and bougainvillea cascading over weathered stone walls. Golden-hour light washing everything in amber, long shadows of chairs crossing the tile. Wide 35mm cinematic frame, film grain, Kodak Portra 400 color grade.",
+    "thumbnail": "https://picsum.photos/seed/prompt-010/800/450"
+  },
+  {
+    "id": "prompt-011",
+    "title": "Ancient Roman forum reconstruction",
+    "category": "History & Classical Themes",
+    "style": "Classical",
+    "scene": "History",
+    "prompt": "A photorealistic 3D reconstruction of the Roman Forum at its height in 50 AD, bright midday sunlight on white marble colonnades, the Temple of Saturn gleaming gold, crowds of toga-clad citizens in motion blur. Aerial perspective from 40 degrees, volumetric dust in shafts of light, epic wide-angle view showing the full forum complex to the Colosseum beyond.",
+    "thumbnail": "https://picsum.photos/seed/prompt-011/800/450"
+  },
+  {
+    "id": "prompt-012",
+    "title": "Academic research paper layout",
+    "category": "Documents & Publishing",
+    "style": "Documents",
+    "scene": "Education",
+    "prompt": "A well-typeset two-column academic research paper page, clean serif body font (Times New Roman 10pt), narrow margins, section headers in small-caps, figures with numbered captions placed between columns. Neutral white background, a header with journal name and DOI, and a footer with page number. Print-ready PDF preview aesthetic.",
+    "thumbnail": "https://picsum.photos/seed/prompt-012/800/450"
+  },
+  {
+    "id": "prompt-013",
+    "title": "3D isometric city block render",
+    "category": "UI & Interfaces",
+    "style": "3D",
+    "scene": "Tech",
+    "prompt": "A clean 3D isometric render of a modern city block as a UI map element — pastel-colored buildings of varying heights, tiny trees, parked cars, and pedestrian crosswalks. Flat-shadow style, soft ambient occlusion, viewed from 45-degree isometric angle. Suitable for use in an app or game UI overlay, 512×512 tile-able square.",
+    "thumbnail": "https://picsum.photos/seed/prompt-013/800/450"
+  },
+  {
+    "id": "prompt-014",
+    "title": "Hand-drawn recipe card — sourdough bread",
+    "category": "Documents & Publishing",
+    "style": "Illustration",
+    "scene": "Food",
+    "prompt": "A charming hand-lettered recipe card for sourdough bread on aged cream cardstock, botanical ink illustrations of wheat stalks in the margins, step-by-step instructions in casual handwriting script, and a small sketch of a round rustic loaf at the top. Warm brown and forest green ink, slight paper grain texture. A4 portrait format.",
+    "thumbnail": "https://picsum.photos/seed/prompt-014/800/450"
+  },
+  {
+    "id": "prompt-015",
+    "title": "Product sheet: premium noise-cancelling headphones",
+    "category": "Products & E-commerce",
+    "style": "Products",
+    "scene": "Commerce",
+    "prompt": "A professional e-commerce product sheet for matte-black over-ear headphones, three-view display (front, side, folded), isolated on pure white. Clean sans-serif feature callouts with thin leader lines pointing to ear cushions, headband padding, and charging port. Hero shot with subtle reflection floor, spec table below.",
+    "thumbnail": "https://picsum.photos/seed/prompt-015/800/450"
+  },
+  {
+    "id": "prompt-016",
+    "title": "Bar chart: global renewable energy 2015–2024",
+    "category": "Charts & Infographics",
+    "style": "Charts",
+    "scene": "Education",
+    "prompt": "A clean grouped bar chart comparing global solar and wind energy capacity from 2015 to 2024, teal bars for solar and olive bars for wind, subtle gridlines, axis labels in Inter 11pt. White background, a clear chart title at top, source note at bottom in gray. Minimal corporate data-visualization style, 1200×675px.",
+    "thumbnail": "https://picsum.photos/seed/prompt-016/800/450"
+  },
+  {
+    "id": "prompt-017",
+    "title": "Fashion editorial: oversized blazer in desert",
+    "category": "Photography & Realism",
+    "style": "Realistic",
+    "scene": "Fashion",
+    "prompt": "A high-fashion editorial photograph of a model wearing an oversized cream linen blazer standing in a vast red-sand desert at dusk, long blue shadows stretching toward the camera. Medium-format film aesthetic, slight desaturation, golden-hour back-light creating a halo effect on loose hair. The blazer is the only tailored element against the raw landscape.",
+    "thumbnail": "https://picsum.photos/seed/prompt-017/800/450"
+  },
+  {
+    "id": "prompt-018",
+    "title": "Illustrated world history timeline poster",
+    "category": "History & Classical Themes",
+    "style": "History",
+    "scene": "Education",
+    "prompt": "A richly illustrated horizontal timeline poster spanning 3000 BC to 2000 AD, divided into color-coded era bands (Ancient, Medieval, Renaissance, Modern). Each major civilization marked with a small landmark illustration — pyramids, Roman arches, the Eiffel Tower — above key dates. Vintage cartographic style, parchment background, serif headline typography.",
+    "thumbnail": "https://picsum.photos/seed/prompt-018/800/450"
+  },
+  {
+    "id": "prompt-019",
+    "title": "Social media content calendar template",
+    "category": "UI & Interfaces",
+    "style": "UI",
+    "scene": "Social",
+    "prompt": "A monthly social media content calendar template in a clean spreadsheet-style grid, color-coded by platform (Instagram pink, LinkedIn blue, Twitter/X black, TikTok teal). Each cell shows day number, content type badge, and a small thumbnail placeholder. Sans-serif fonts, subtle row hover state, export to PDF button visible in corner. Google Sheets-inspired aesthetic.",
+    "thumbnail": "https://picsum.photos/seed/prompt-019/800/450"
+  },
+  {
+    "id": "prompt-020",
+    "title": "Botanical illustration: tropical monstera",
+    "category": "Illustration & Art",
+    "style": "Illustration",
+    "scene": "Creative",
+    "prompt": "A detailed botanical illustration of a monstera deliciosa plant in the style of 18th-century natural history engravings, pencil-line outlines with precise watercolor fills in deep jungle green. Leaf fenestration accurately rendered, a small cross-section inset at bottom-right showing root structure. Latin binomial label in italic serif below. Cream background, portrait A3.",
+    "thumbnail": "https://picsum.photos/seed/prompt-020/800/450"
+  },
+  {
+    "id": "prompt-021",
+    "title": "Street food market at night — Bangkok",
+    "category": "Scenes & Storytelling",
+    "style": "Photography",
+    "scene": "Food",
+    "prompt": "A wide-angle street photograph of a bustling Bangkok night market, rows of yellow-lit food stalls with Thai signage, steam rising from woks, motorbikes weaving between vendors and shoppers. Shot at 28mm f/2, ISO 6400, warm sodium-vapor light mixed with cool neon signs reflecting on wet concrete. Vivid, chaotic energy, cinéma vérité style.",
+    "thumbnail": "https://picsum.photos/seed/prompt-021/800/450"
+  },
+  {
+    "id": "prompt-022",
+    "title": "Minimalist brand identity — wellness studio",
+    "category": "Brand & Logos",
+    "style": "Brand",
+    "scene": "Fashion",
+    "prompt": "A minimalist brand identity board for a premium wellness studio: wordmark in lowercase Garamond Light, a circular logo mark formed from two overlapping leaf shapes, and a muted palette of sage green, off-white, and warm sand. Shown on a business card, linen tote bag, and glass water bottle mockup. Clean, editorial, spa-like confidence.",
+    "thumbnail": "https://picsum.photos/seed/prompt-022/800/450"
+  },
+  {
+    "id": "prompt-023",
+    "title": "Abandoned warehouse interior — urbex photography",
+    "category": "Photography & Realism",
+    "style": "Photography",
+    "scene": "Creative",
+    "prompt": "An urban exploration photograph of an abandoned factory interior, shafts of dusty light cutting through broken roof panels onto cracked concrete floors, rusted machinery silhouettes in the background. HDR-controlled high contrast, desaturated cool shadows, warm amber light beams, debris and vegetation detail sharp in foreground. No people, total silence implied.",
+    "thumbnail": "https://picsum.photos/seed/prompt-023/800/450"
+  },
+  {
+    "id": "prompt-024",
+    "title": "Motion graphics UI — fintech app onboarding",
+    "category": "UI & Interfaces",
+    "style": "UI",
+    "scene": "Commerce",
+    "prompt": "A sequence of three onboarding screens for a modern fintech app: dark navy background, large display numbers in white, progress ring animations, and smooth card-swipe micro-interactions illustrated as still frames. Clean iconography, sans-serif numbers, a green CTA pill 'Get Started', subtle particle background. Figma frame export style, 390×844px iPhone 14 Pro dimensions.",
+    "thumbnail": "https://picsum.photos/seed/prompt-024/800/450"
+  },
+  {
+    "id": "prompt-025",
+    "title": "Character lineup: fantasy RPG party",
+    "category": "Characters & People",
+    "style": "Characters",
+    "scene": "Story",
+    "prompt": "A full character lineup sheet of a five-member fantasy RPG adventuring party standing in a row against a neutral parchment background: a dwarf warrior, human mage, elf ranger, halfling rogue, and dragonborn paladin. Each character at consistent scale, front-facing, fully rendered in a semi-realistic painterly style. Warm candlelit color palette, intricate costume detail visible.",
+    "thumbnail": "https://picsum.photos/seed/prompt-025/800/450"
+  },
+  {
+    "id": "prompt-026",
+    "title": "Network topology diagram — enterprise cloud",
+    "category": "Charts & Infographics",
+    "style": "Charts",
+    "scene": "Tech",
+    "prompt": "A technical network topology diagram for an enterprise multi-cloud architecture, clean white background, nodes as flat-design icons (servers, load balancers, databases, CDN edge nodes, firewalls), connected by labeled lines with protocol annotations (HTTPS, gRPC, TCP). Color-coded by zone (AWS orange, GCP blue, on-prem gray). Minimal, engineering-presentation quality.",
+    "thumbnail": "https://picsum.photos/seed/prompt-026/800/450"
+  },
+  {
+    "id": "prompt-027",
+    "title": "Hand-illustrated travel map — Kyoto neighborhoods",
+    "category": "Scenes & Storytelling",
+    "style": "Illustration",
+    "scene": "Travel",
+    "prompt": "A hand-illustrated tourist map of Kyoto's neighborhoods, isometric perspective, tiny illustrated landmarks (Fushimi Inari torii gates, Kinkaku-ji temple, Arashiyama bamboo grove), streets labeled in English and Japanese kanji, soft watercolor fills for neighborhoods in terracotta, moss green, and indigo. Vintage cartographic border, compass rose in bottom corner.",
+    "thumbnail": "https://picsum.photos/seed/prompt-027/800/450"
+  },
+  {
+    "id": "prompt-028",
+    "title": "Science textbook diagram — photosynthesis cycle",
+    "category": "Documents & Publishing",
+    "style": "Documents",
+    "scene": "Education",
+    "prompt": "A clear, pedagogically accurate diagram of the photosynthesis light and dark reactions cycle for a high school biology textbook. Labeled organelles (chloroplast, thylakoid, stroma), arrows showing electron transport chain, ATP and NADPH production highlighted in yellow boxes, CO2 and O2 flow marked. Clean line art, flat color fills, sans-serif annotations, white background.",
+    "thumbnail": "https://picsum.photos/seed/prompt-028/800/450"
+  },
+  {
+    "id": "prompt-029",
+    "title": "Social media post: eco-brand campaign visual",
+    "category": "Posters & Typography",
+    "style": "Poster",
+    "scene": "Social",
+    "prompt": "A square 1:1 social media campaign image for an eco-conscious fashion brand, bold sans-serif headline 'WEAR LESS, LIVE MORE' in forest green on an off-white linen textured background, a minimalist line-art leaf icon centered above the text, and the brand wordmark bottom-center. Instagram feed post format, 1080×1080px, no photography.",
+    "thumbnail": "https://picsum.photos/seed/prompt-029/800/450"
+  },
+  {
+    "id": "prompt-030",
+    "title": "Architectural section drawing — passive house",
+    "category": "Architecture & Spaces",
+    "style": "Architecture",
+    "scene": "Education",
+    "prompt": "A precise architectural section drawing of a passive house showing insulation layers, triple-glazed windows, heat recovery ventilation ducts, and underground thermal mass, all labeled with dimension annotations. Black and white technical drawing style, hatching to denote materials (concrete, timber, insulation), human figure at 1:50 scale for reference. CAD-precision line weights.",
+    "thumbnail": "https://picsum.photos/seed/prompt-030/800/450"
+  }
+]
