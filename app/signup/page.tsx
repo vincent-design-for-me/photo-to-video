@@ -1,41 +1,39 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabaseRef = useRef(createClient());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setSuccess("");
     if (password !== confirm) {
       setError("Passwords do not match");
       return;
     }
     setLoading(true);
-    const { error } = await supabaseRef.current.auth.signUp({
+    const derivedName = email.split("@")[0]?.trim() || "Creator";
+    const { error } = await authClient.signUp.email({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      name: derivedName,
     });
     if (error) {
-      setError(error.message);
+      setError(error.message ?? "Could not create account");
       setLoading(false);
       return;
     }
-    setSuccess("Check your email for a confirmation link.");
-    setLoading(false);
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -67,7 +65,6 @@ export default function SignupPage() {
         </div>
 
         {error && <div className="auth-message error">{error}</div>}
-        {success && <div className="auth-message success">{success}</div>}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-field">

@@ -1,8 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { DEFAULT_RETRYABLE_STATUSES, fetchWithRetry, isTransientFetchError } from "../http/fetchWithRetry";
 import { getStorageObjectKeyForWorkflowFile } from "../jobs/publicAsset";
 import { getSignedUrl } from "../jobs/storage";
-import { isSupabaseMode } from "../supabase";
+import { isR2Configured } from "../cloudflare/config";
 import { createPlaceholderClip } from "../video/ffmpeg";
 
 type GenerateKlingSkillClipInput = {
@@ -29,11 +30,27 @@ type SkillTemplateValues = {
 };
 
 type UnknownJson = Record<string, unknown>;
+type AuthProvider = string | (() => string | undefined);
 
-export async function generateKlingSkillClip(input: GenerateKlingSkillClipInput, authorization?: string): Promise<string> {
+function allowPreviewFallback(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.ALLOW_PREVIEW_FALLBACK === "true";
+}
+
+function resolveAuth(authorization?: AuthProvider): string | undefined {
+  return typeof authorization === "function" ? authorization() : authorization;
+}
+
+export async function generateKlingSkillClip(
+  input: GenerateKlingSkillClipInput,
+  authorization?: AuthProvider
+): Promise<string> {
   await mkdir(path.dirname(input.outputPath), { recursive: true });
 
-  if (!authorization || !process.env.KLING_API_BASE_URL) {
+  const initialAuth = resolveAuth(authorization);
+  if (!initialAuth || !process.env.KLING_API_BASE_URL) {
+    if (!allowPreviewFallback()) {
+      throw new Error("Kling Skill credentials or KLING_API_BASE_URL are not configured in production.");
+    }
     return createPlaceholderClip({
       imagePath: input.lastFramePath,
       outputPath: input.outputPath,
@@ -76,17 +93,26 @@ export async function generateKlingSkillClip(input: GenerateKlingSkillClipInput,
         aspectRatio: input.aspectRatio
       });
 
-  const createResponse = await fetch(createUrl, {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      "Content-Type": "application/json"
+  const createResponse = await fetchWithRetry(
+    createUrl,
+    {
+      method: "POST",
+      headers: {
+        Authorization: resolveAuth(authorization) ?? initialAuth,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
     },
-    body: JSON.stringify(requestBody)
-  });
+    {
+      timeoutMs: 120_000,
+      maxAttempts: 3,
+      baseDelayMs: 3000,
+      label: "klingSkill:create"
+    }
+  );
 
   if (!createResponse.ok) {
-    throw new Error(`Kling Skill task creation failed: ${await createResponse.text()}`);
+    throw new Error(`Kling Skill task creation failed (${createResponse.status}): ${(await createResponse.text()).slice(0, 500)}`);
   }
 
   const created = (await createResponse.json()) as UnknownJson;
@@ -95,8 +121,17 @@ export async function generateKlingSkillClip(input: GenerateKlingSkillClipInput,
     throw new Error("Kling Skill did not return a task id");
   }
 
-  const videoUrl = await pollKlingSkillTask(baseUrl, taskId, authorization);
-  const videoResponse = await fetch(videoUrl);
+  const videoUrl = await pollKlingSkillTask(baseUrl, taskId, authorization ?? initialAuth);
+  const videoResponse = await fetchWithRetry(
+    videoUrl,
+    {},
+    {
+      timeoutMs: 90_000,
+      maxAttempts: 3,
+      baseDelayMs: 2000,
+      label: "klingSkill:download"
+    }
+  );
   if (!videoResponse.ok) {
     throw new Error(`Kling Skill video download failed: ${videoResponse.status}`);
   }
@@ -150,41 +185,83 @@ function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean 
   return value === "true" || value === "1" || value === "yes";
 }
 
-async function pollKlingSkillTask(baseUrl: string, taskId: string, authorization: string): Promise<string> {
+async function pollKlingSkillTask(
+  baseUrl: string,
+  taskId: string,
+  authorization: AuthProvider
+): Promise<string> {
   const attempts = Number(process.env.KLING_POLL_ATTEMPTS ?? 120);
   const intervalMs = Number(process.env.KLING_POLL_INTERVAL_MS ?? 5000);
   const statusPath = process.env.KLING_SKILL_STATUS_PATH ?? "/v1/videos/{task_id}";
+  const maxConsecutiveErrors = 8;
+
+  let consecutiveErrors = 0;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await fetch(buildUrl(baseUrl, statusPath.replace("{task_id}", encodeURIComponent(taskId))), {
-      headers: { Authorization: authorization }
-    });
-    if (!response.ok) {
-      throw new Error(`Kling Skill status failed: ${await response.text()}`);
+    const authHeader = resolveAuth(authorization);
+    if (!authHeader) {
+      throw new Error("Kling Skill authorization became unavailable during polling");
     }
 
-    const payload = (await response.json()) as UnknownJson;
-    const status = findString(payload, ["status", "data.status"]);
-    if (status === "failed") {
-      throw new Error(findString(payload, ["error", "message", "data.error", "data.message"]) ?? "Kling Skill task failed");
-    }
+    try {
+      const response = await fetch(buildUrl(baseUrl, statusPath.replace("{task_id}", encodeURIComponent(taskId))), {
+        signal: AbortSignal.timeout(30_000),
+        headers: { Authorization: authHeader }
+      });
 
-    const videoUrl = findString(payload, [
-      "video_url",
-      "url",
-      "output.video_url",
-      "output.url",
-      "result.video_url",
-      "result.url",
-      "data.video_url",
-      "data.url",
-      "data.output.video_url",
-      "data.output.url",
-      "data.result.video_url",
-      "data.result.url"
-    ]);
-    if (videoUrl) {
-      return videoUrl;
+      if (!response.ok) {
+        const body = (await response.text()).slice(0, 400);
+        if (DEFAULT_RETRYABLE_STATUSES.includes(response.status as (typeof DEFAULT_RETRYABLE_STATUSES)[number])) {
+          consecutiveErrors += 1;
+          console.warn(
+            `[klingSkill:poll] task ${taskId} transient HTTP ${response.status} (${consecutiveErrors}/${maxConsecutiveErrors}): ${body}`
+          );
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            throw new Error(`Kling Skill status failed repeatedly (${response.status}): ${body}`);
+          }
+          await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          continue;
+        }
+        throw new Error(`Kling Skill status failed (${response.status}): ${body}`);
+      }
+
+      consecutiveErrors = 0;
+
+      const payload = (await response.json()) as UnknownJson;
+      const status = findString(payload, ["status", "data.status"]);
+      if (status === "failed") {
+        throw new Error(findString(payload, ["error", "message", "data.error", "data.message"]) ?? "Kling Skill task failed");
+      }
+
+      const videoUrl = findString(payload, [
+        "video_url",
+        "url",
+        "output.video_url",
+        "output.url",
+        "result.video_url",
+        "result.url",
+        "data.video_url",
+        "data.url",
+        "data.output.video_url",
+        "data.output.url",
+        "data.result.video_url",
+        "data.result.url"
+      ]);
+      if (videoUrl) {
+        return videoUrl;
+      }
+    } catch (error) {
+      if (isTransientFetchError(error)) {
+        consecutiveErrors += 1;
+        console.warn(
+          `[klingSkill:poll] task ${taskId} transient network error (${consecutiveErrors}/${maxConsecutiveErrors}): ${error instanceof Error ? error.message : String(error)}`
+        );
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
     }
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -194,7 +271,7 @@ async function pollKlingSkillTask(baseUrl: string, taskId: string, authorization
 }
 
 async function resolvePublicFrameUrl(filePath: string, jobId: string): Promise<string> {
-  if (isSupabaseMode()) {
+  if (isR2Configured()) {
     const storageKey = getStorageObjectKeyForWorkflowFile(jobId, filePath);
     if (storageKey) {
       return getSignedUrl(storageKey);

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: [],
+  serverExternalPackages: ["ffmpeg-static"],
   experimental: {
     devtoolSegmentExplorer: false
   }

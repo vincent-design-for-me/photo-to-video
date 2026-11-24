@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { isJobRunningStale, isTimestampStale } from "@/lib/jobs/stale";
+import styles from "./JobClient.module.css";
 
 function BeforeAfterSlider({
   beforeSrc,
@@ -99,6 +101,17 @@ type JobStep = {
   updatedAt?: string;
 };
 
+type FrameJudgement = {
+  consistencyScore: number;
+  geometryPreserved: number;
+  perspectivePreserved: number;
+  flaggedIssues: string[];
+  rationale: string;
+  passed: boolean;
+  threshold: number;
+  judgedAt: string;
+};
+
 type JobPayload = {
   id: string;
   status: "queued" | "running" | "awaiting_review" | "complete" | "failed";
@@ -107,12 +120,16 @@ type JobPayload = {
   error?: string;
   sourceImages: { name: string }[];
   generatedFrames: string[];
+  frameJudgements?: (FrameJudgement | null)[];
   framePrompts?: string[];
   generatedClips: string[];
   finalVideoPath?: string;
   config: { aspectRatio: string };
   steps: JobStep[];
+  judgeEnabled?: boolean;
 };
+
+const JUDGE_PENDING_WINDOW_MS = 120_000;
 
 function cssAspectRatio(ratio: string): string {
   return ratio.replace(":", " / ");
@@ -133,18 +150,25 @@ export default function JobClient({
   const [editText, setEditText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [lightbox, setLightbox] = useState<{ index: number; kind: "before" | "after" } | null>(null);
   // Tracks indices we submitted regen for locally — gives immediate loading state
   const [localRegen, setLocalRegen] = useState<number[]>([]);
+  const pollInFlightRef = useRef(false);
 
   useEffect(() => {
     setJob(initialJob);
   }, [initialJob]);
 
+  const isTerminal = job?.status === "complete" || job?.status === "failed";
+
   useEffect(() => {
     let active = true;
 
     async function load() {
+      if (pollInFlightRef.current) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      pollInFlightRef.current = true;
       try {
         const response = await fetch(`/api/jobs/${id}`, { cache: "no-store" });
         if (!response.ok) throw new Error(await response.text());
@@ -152,6 +176,9 @@ export default function JobClient({
         if (active) {
           setJob(payload);
           setError("");
+          if (payload.status !== "awaiting_review") {
+            setApproving(false);
+          }
           // Remove from localRegen any index whose step has settled (complete or failed)
           setLocalRegen((prev) =>
             prev.filter((i) => {
@@ -164,16 +191,29 @@ export default function JobClient({
         if (active) {
           setError(loadError instanceof Error ? loadError.message : "Could not load job");
         }
+      } finally {
+        pollInFlightRef.current = false;
       }
     }
 
     load();
+    if (isTerminal) {
+      return () => {
+        active = false;
+      };
+    }
+
     const interval = setInterval(load, 2500);
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [id]);
+  }, [id, isTerminal]);
 
   useEffect(() => {
     const particlesEl = document.getElementById("mouse-particles");
@@ -220,7 +260,21 @@ export default function JobClient({
   }, [lightbox]);
 
   async function retry() {
-    await fetch(`/api/jobs/${id}/run`, { method: "POST" });
+    if (retrying) return;
+    setRetrying(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/jobs/${id}/run`, { method: "POST" });
+      if (!res.ok) {
+        setError(await res.text());
+        return;
+      }
+      setJob((prev) => (prev ? { ...prev, status: "running", error: undefined } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resume job");
+    } finally {
+      setRetrying(false);
+    }
   }
 
   async function submitRegen() {
@@ -261,6 +315,9 @@ export default function JobClient({
   }
 
   const isReviewMode = job?.status === "awaiting_review";
+  const isStaleRunning = job ? isJobRunningStale(job) : false;
+  const completedFrameCount = job ? job.generatedFrames.filter(Boolean).length : 0;
+  const completedClipCount = job ? job.generatedClips.filter(Boolean).length : 0;
   const anyFrameRunning =
     (job?.steps.some((s) => s.kind === "image" && s.status === "running") ?? false) ||
     localRegen.length > 0;
@@ -296,11 +353,13 @@ export default function JobClient({
             <p className="fineprint">Job ID: {id}</p>
           </div>
           <div className="actions">
-            {job?.status === "failed" ? (
-              <button className="job-action" onClick={retry}>Retry</button>
+            {job?.status === "failed" || isStaleRunning ? (
+              <button className="job-action" onClick={retry} disabled={retrying}>
+                {retrying ? "Resuming…" : isStaleRunning ? "Resume" : "Retry"}
+              </button>
             ) : null}
             {job?.status === "complete" ? (
-              <a className="job-action" href={`/api/jobs/${id}/download`}>Download MP4</a>
+              <a className="job-action" href={`/api/jobs/${id}/download?download=1`}>Download MP4</a>
             ) : null}
           </div>
         </div>
@@ -317,11 +376,11 @@ export default function JobClient({
             </div>
             <div className="status-card">
               <span className="label">Generated frames</span>
-              <span className="value">{job?.generatedFrames.length ?? 0}</span>
+              <span className="value">{completedFrameCount}</span>
             </div>
             <div className="status-card">
               <span className="label">Kling clips</span>
-              <span className="value">{job?.generatedClips.length ?? 0}</span>
+              <span className="value">{completedClipCount}</span>
             </div>
             <div className="status-card">
               <span className="label">Final render</span>
@@ -353,6 +412,7 @@ export default function JobClient({
                 const isRegenerating = isServerRunning || localRegen.includes(i);
                 const isFailed = imageStep?.status === "failed" && !isRegenerating;
                 const isSelected = selectedIndex === i;
+                const judgement = job.frameJudgements?.[i] ?? null;
                 const vParam = imageStep?.updatedAt ? `?v=${encodeURIComponent(imageStep.updatedAt)}` : "";
 
                 return (
@@ -411,6 +471,22 @@ export default function JobClient({
                         </button>
                       </>
                     )}
+                    {!isRegenerating && !isFailed && (
+                      judgement ? (
+                        <span
+                          className={`${styles["score-badge"]} ${judgement.passed ? styles.pass : styles.fail}`}
+                          title={judgement.rationale}
+                        >
+                          <span className={styles["score-num"]}>{judgement.consistencyScore}</span>
+                          consistency
+                          {judgement.flaggedIssues.length > 0 && (
+                            <span className={styles["score-flag"]}>· ⚠ {judgement.flaggedIssues.length}</span>
+                          )}
+                        </span>
+                      ) : job.judgeEnabled !== false && !isTimestampStale(imageStep?.updatedAt ?? job.updatedAt, JUDGE_PENDING_WINDOW_MS) ? (
+                        <span className={`${styles["score-badge"]} ${styles.pending}`}>Scoring…</span>
+                      ) : null
+                    )}
                     {isRegenerating && (
                       <div className="loader-overlay">
                         <div className="loader-spinner" />
@@ -432,6 +508,30 @@ export default function JobClient({
                   Edit Frame {selectedIndex + 1}
                   <span className="fineprint"> — describe changes to append to the original prompt</span>
                 </label>
+                {(() => {
+                  const j = job.frameJudgements?.[selectedIndex] ?? null;
+                  if (!j) return null;
+                  return (
+                    <div className={styles.findings}>
+                      <div className={styles["findings-head"]}>
+                        <span className={j.passed ? styles["head-score-pass"] : styles["head-score-fail"]}>
+                          Consistency {j.consistencyScore}/100 · {j.passed ? "Pass" : "Below threshold"} ({j.threshold})
+                        </span>
+                        <span className={styles["sub-scores"]}>
+                          geometry {j.geometryPreserved} · perspective {j.perspectivePreserved}
+                        </span>
+                      </div>
+                      {j.rationale && <p className={styles.rationale}>{j.rationale}</p>}
+                      {j.flaggedIssues.length > 0 ? (
+                        <ul className={styles["issue-list"]}>
+                          {j.flaggedIssues.map((issue, k) => <li key={k}>{issue}</li>)}
+                        </ul>
+                      ) : (
+                        <p className={styles["no-issues"]}>No structural issues flagged.</p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <textarea
                   className="edit-textarea"
                   rows={5}
@@ -459,12 +559,13 @@ export default function JobClient({
           </section>
         ) : null}
 
-        {job && job.generatedFrames.length > 0 && !isReviewMode ? (
+        {job && completedFrameCount > 0 && !isReviewMode ? (
           <section className="glass-panel">
             <h2>Before &amp; After</h2>
             <p className="fineprint" style={{ marginTop: -8, marginBottom: 16 }}>Drag to compare</p>
             <div className="ba-slider-grid">
-              {job.generatedFrames.map((_, i) => {
+              {job.generatedFrames.map((framePath, i) => {
+                if (!framePath) return null;
                 const imageStep = job.steps.find((s) => s.kind === "image" && s.index === i);
                 const vParam = imageStep?.updatedAt ? `?v=${encodeURIComponent(imageStep.updatedAt)}` : "";
                 return (
@@ -481,11 +582,12 @@ export default function JobClient({
           </section>
         ) : null}
 
-        {job && job.generatedClips.length > 0 ? (
+        {job && completedClipCount > 0 ? (
           <section className="glass-panel">
             <h2>Clips</h2>
             <div className="clips-list">
-              {job.generatedClips.map((_, i) => {
+              {job.generatedClips.map((clipPath, i) => {
+                if (!clipPath) return null;
                 const clipStep = job.steps.find((s) => s.kind === "video" && s.index === i);
                 return (
                   <div className="clip-item" key={i}>

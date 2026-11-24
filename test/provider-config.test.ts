@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildGeminiGenerateContentUrl, getImageGenerationConfig, readGeminiJsonResponse } from "../lib/providers/geminiCompat";
+import { buildGeminiGenerateContentUrl, getImageGenerationConfig, getJudgeLLMConfig, readGeminiJsonResponse } from "../lib/providers/geminiCompat";
 import { buildKlingAuthorization, createKlingJwt, describeKlingJwt } from "../lib/providers/klingAuth";
 import { buildKlingSkillRequestBody, fillKlingSkillTemplate } from "../lib/providers/klingSkill";
 
@@ -26,6 +26,34 @@ test("image generation config reads IMAGE_* env vars", () => {
       format: "gemini-native"
     }
   );
+});
+
+test("judge LLM config falls back to LLM_* when no JUDGE_* overrides are set", () => {
+  assert.deepEqual(
+    getJudgeLLMConfig({ LLM_BASE_URL: "https://llm.example/", LLM_API_KEY: "llm-key", LLM_MODEL: "agnes-2.0-flash" }),
+    { baseUrl: "https://llm.example", apiKey: "llm-key", model: "agnes-2.0-flash" }
+  );
+});
+
+test("JUDGE_MODEL overrides only the model, reusing the LLM endpoint and key", () => {
+  assert.deepEqual(
+    getJudgeLLMConfig({ LLM_BASE_URL: "https://llm.example", LLM_API_KEY: "llm-key", LLM_MODEL: "agnes-2.0-flash", JUDGE_MODEL: "agnes-2.0-pro" }),
+    { baseUrl: "https://llm.example", apiKey: "llm-key", model: "agnes-2.0-pro" }
+  );
+});
+
+test("JUDGE_LLM_BASE_URL and JUDGE_LLM_API_KEY point the judge at a separate endpoint", () => {
+  assert.deepEqual(
+    getJudgeLLMConfig({
+      LLM_BASE_URL: "https://llm.example", LLM_API_KEY: "llm-key", LLM_MODEL: "agnes-2.0-flash",
+      JUDGE_LLM_BASE_URL: "https://judge.example/", JUDGE_LLM_API_KEY: "judge-key", JUDGE_MODEL: "strong-vision-1"
+    }),
+    { baseUrl: "https://judge.example", apiKey: "judge-key", model: "strong-vision-1" }
+  );
+});
+
+test("judge LLM config is null when neither JUDGE_* nor LLM_* credentials exist", () => {
+  assert.equal(getJudgeLLMConfig({}), null);
 });
 
 test("Gemini-compatible response parser reports HTML endpoint mistakes clearly", async () => {

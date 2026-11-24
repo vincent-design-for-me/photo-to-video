@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildLoginHref, canonicalizeAuthPath, isPublicPath } from "../lib/auth/paths";
+import { getR2Config, isCloudMode, isD1Configured, isR2Configured } from "../lib/cloudflare/config";
+import { D1HttpDatabase, normalizeD1Param } from "../lib/cloudflare/d1";
 import { getStorageObjectKeyForPublicAsset, getStorageObjectKeyForWorkflowFile } from "../lib/jobs/publicAsset";
-import { isStorageRlsError, storagePolicySql } from "../lib/jobs/storage";
-import { getSupabaseKeyRole, isSupabaseServiceRoleConfigured } from "../lib/supabase";
 
 test("canonicalizeAuthPath normalizes legacy auth routes", () => {
   assert.equal(canonicalizeAuthPath("/auth/login"), "/login");
@@ -66,46 +66,70 @@ test("getStorageObjectKeyForPublicAsset matches stored source and frame assets b
   );
 });
 
-test("isStorageRlsError recognizes Supabase storage policy failures", () => {
-  assert.equal(isStorageRlsError("new row violates row-level security policy"), true);
-  assert.equal(isStorageRlsError("Storage upload failed: new row violates row-level security policy"), true);
-  assert.equal(isStorageRlsError("permission denied for table objects"), false);
-});
-
-test("storagePolicySql allows authenticated users and service_role for job-assets bucket", () => {
-  assert.match(storagePolicySql, /bucket_id = 'job-assets'/);
-  assert.match(storagePolicySql, /auth\.uid\(\) is not null/);
-  assert.match(storagePolicySql, /auth\.role\(\) = 'service_role'/);
-});
-
-test("getSupabaseKeyRole reads the role claim from Supabase JWTs", () => {
-  const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.signature";
-  const serviceRoleKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature";
-
-  assert.equal(getSupabaseKeyRole(anonKey), "anon");
-  assert.equal(getSupabaseKeyRole(serviceRoleKey), "service_role");
-  assert.equal(getSupabaseKeyRole("not-a-jwt"), undefined);
-});
-
-test("isSupabaseServiceRoleConfigured requires a real service_role JWT", () => {
-  const env = {
-    SUPABASE_URL: "https://example.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature"
+test("Cloudflare D1 and R2 configuration helpers validate required env vars", () => {
+  const fullEnv = {
+    CLOUDFLARE_ACCOUNT_ID: "acc-123",
+    CLOUDFLARE_D1_DATABASE_ID: "db-456",
+    CLOUDFLARE_API_TOKEN: "tok-789",
+    R2_ACCESS_KEY_ID: "r2-key",
+    R2_SECRET_ACCESS_KEY: "r2-secret",
+    R2_BUCKET_NAME: "photo-to-video-assets",
   };
-  const badEnv = {
-    SUPABASE_URL: "https://example.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.signature"
-  };
+  assert.equal(isD1Configured(fullEnv), true);
+  assert.equal(isR2Configured(fullEnv), true);
+  assert.equal(isCloudMode(fullEnv), true);
+  assert.equal(getR2Config(fullEnv).endpoint, "https://acc-123.r2.cloudflarestorage.com");
 
-  assert.equal(isSupabaseServiceRoleConfigured(env), true);
-  assert.equal(isSupabaseServiceRoleConfigured(badEnv), false);
+  const partialEnv = { CLOUDFLARE_ACCOUNT_ID: "acc-123" };
+  assert.equal(isD1Configured(partialEnv), false);
+  assert.equal(isR2Configured(partialEnv), false);
+  assert.equal(isCloudMode(partialEnv), false);
 });
 
-test("isSupabaseServiceRoleConfigured accepts process.env-style optional keys", () => {
-  const env: NodeJS.ProcessEnv = {
-    SUPABASE_URL: "https://example.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signature"
+test("D1HttpDatabase executes parameterized SQL over Cloudflare REST API", async () => {
+  let seenUrl = "";
+  let seenBody: { sql: string; params: unknown[] } | null = null;
+
+  const mockFetch: typeof fetch = async (input, init) => {
+    seenUrl = String(input);
+    seenBody = JSON.parse(String(init?.body)) as { sql: string; params: unknown[] };
+    return new Response(
+      JSON.stringify({
+        success: true,
+        result: [
+          {
+            success: true,
+            results: [{ id: "u1", email: "a@example.com" }],
+            meta: { changes: 1, last_row_id: 1 },
+          },
+        ],
+      }),
+      { status: 200 }
+    );
   };
 
-  assert.equal(isSupabaseServiceRoleConfigured(env), true);
+  const db = new D1HttpDatabase(
+    { accountId: "acc1", databaseId: "db1", apiToken: "secret-tok" },
+    { fetchImpl: mockFetch }
+  );
+
+  // Duck-type check expected by Better Auth's D1SqliteDialect
+  assert.equal(typeof db.prepare, "function");
+  assert.equal(typeof db.batch, "function");
+  assert.equal(typeof db.exec, "function");
+
+  const now = new Date("2026-11-23T12:00:00.000Z");
+  const row = await db
+    .prepare("SELECT id, email FROM user WHERE createdAt <= ? AND emailVerified = ?")
+    .bind(now, true)
+    .first<{ id: string; email: string }>();
+
+  assert.equal(seenUrl, "https://api.cloudflare.com/client/v4/accounts/acc1/d1/database/db1/query");
+  assert.deepEqual(seenBody, {
+    sql: "SELECT id, email FROM user WHERE createdAt <= ? AND emailVerified = ?",
+    params: ["2026-11-23T12:00:00.000Z", 1],
+  });
+  assert.deepEqual(row, { id: "u1", email: "a@example.com" });
+  assert.equal(normalizeD1Param(undefined), null);
+  assert.equal(normalizeD1Param(false), 0);
 });

@@ -12,6 +12,7 @@ const PUBLIC_PATHS = new Set([
   "/forgot-password",
   "/reset-password",
   "/auth/callback",
+  "/library",
 ]);
 
 export function canonicalizeAuthPath(pathname: string): string {

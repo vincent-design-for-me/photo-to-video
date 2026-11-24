@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getServerUser } from "@/lib/auth/session";
 import { getJobsByUser } from "@/lib/jobs/store";
 import type { VideoJob } from "@/lib/jobs/types";
 
@@ -15,8 +15,7 @@ function fmtDate(d: string) {
 }
 
 export default async function HistoryPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getServerUser();
   if (!user) redirect("/login");
 
   let jobs: VideoJob[] = [];

@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { authClient } from "@/lib/auth/client";
 import { canonicalizeAuthPath } from "@/lib/auth/paths";
-import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [nextPath, setNextPath] = useState("/");
   const [callbackError, setCallbackError] = useState("");
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -26,9 +25,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await authClient.signIn.email({ email, password });
     if (error) {
-      setError(error.message);
+      setError(error.message ?? "Invalid email or password");
       setLoading(false);
       return;
     }

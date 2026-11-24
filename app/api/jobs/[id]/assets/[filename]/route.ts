@@ -1,9 +1,10 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { requireOwnedJob } from "../../../../../../lib/jobs/ownership";
 import { getJob } from "../../../../../../lib/jobs/store";
 import { getStorageObjectKeyForPublicAsset } from "../../../../../../lib/jobs/publicAsset";
-import { isSupabaseMode } from "../../../../../../lib/supabase";
+import { isR2Configured } from "../../../../../../lib/cloudflare/config";
 import { getSignedUrl } from "../../../../../../lib/jobs/storage";
 
 export async function GET(
@@ -17,18 +18,21 @@ export async function GET(
     return new NextResponse("Invalid filename", { status: 400 });
   }
 
-  const job = await getJob(id);
-  if (!job) {
-    return new NextResponse("Job not found", { status: 404 });
-  }
-
-  if (isSupabaseMode()) {
+  if (isR2Configured()) {
+    const owned = await requireOwnedJob(id);
+    if (owned.response) return owned.response;
+    const { job } = owned;
     const storageKey = getStorageObjectKeyForPublicAsset(filename, job.sourceImages, job.generatedFrames);
     if (!storageKey) {
       return new NextResponse("Asset not found", { status: 404 });
     }
     const signedUrl = await getSignedUrl(storageKey);
     return NextResponse.redirect(signedUrl);
+  }
+
+  const job = await getJob(id);
+  if (!job) {
+    return new NextResponse("Job not found", { status: 404 });
   }
 
   const candidates = [

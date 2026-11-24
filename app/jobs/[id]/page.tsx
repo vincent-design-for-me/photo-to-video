@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import JobClient from "./JobClient";
 import { requireOwnedJob } from "../../../lib/jobs/ownership";
+import { getJudgeLLMConfig } from "../../../lib/providers/geminiCompat";
 
 export default async function JobPage({
   params,
@@ -23,6 +24,6 @@ export default async function JobPage({
   return <JobClient id={id} initialError={runError} initialJob={initialJob} />;
 }
 
-function sanitizeJob<T extends { rootDir?: string }>(job: T): T {
-  return { ...job, rootDir: undefined };
+function sanitizeJob<T extends { rootDir?: string }>(job: T): T & { judgeEnabled: boolean } {
+  return { ...job, rootDir: undefined, judgeEnabled: Boolean(getJudgeLLMConfig()) };
 }

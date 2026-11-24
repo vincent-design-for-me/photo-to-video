@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth/client";
 import { buildLoginHref } from "@/lib/auth/paths";
-import { createClient } from "@/lib/supabase/client";
 import {
   ACCEPTED_TYPES,
   DEFAULT_INTERIOR_STYLE_ID,
@@ -18,7 +18,6 @@ import {
  */
 export function useUploadJob() {
   const router = useRouter();
-  const supabaseRef = useRef(createClient());
 
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -106,26 +105,115 @@ export function useUploadJob() {
     event.preventDefault();
     if (files.length === 0) return;
 
-    const { data: { user } } = await supabaseRef.current.auth.getUser();
-    if (!user) {
+    const sessionRes = await authClient.getSession();
+    if (!sessionRes.data?.user) {
       setMessage("Sign in to create a video job.");
       router.push(buildLoginHref("/"));
       return;
     }
 
     setBusy(true);
-    setMessage("Creating the job...");
+    setMessage("Preparing upload...");
 
-    const fd = new FormData();
-    for (const f of files) fd.append("images", f);
-    fd.append("aspectRatio", selectedRatio);
-    fd.append("styleId", selectedStyle);
-    fd.append("resolution", selectedResolution);
     const trimmedEdits = editRequests.map(s => s.trim());
-    if (trimmedEdits.some(s => s.length > 0)) fd.append("editRequests", JSON.stringify(trimmedEdits));
+    const hasEdits = trimmedEdits.some(s => s.length > 0);
 
     try {
-      const createResponse = await fetch("/api/jobs", { method: "POST", body: fd });
+      let createResponse: Response;
+
+      // Prefer direct-to-Cloudflare-R2 upload via presigned PUT URLs to bypass
+      // Vercel's 4.5 MB Serverless Function request body limit.
+      const prepResponse = await fetch("/api/jobs/upload-urls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: files.map((f) => ({
+            name: f.name,
+            type: f.type || "image/jpeg",
+            size: f.size,
+          })),
+        }),
+      });
+
+      if (prepResponse.status === 401 || prepResponse.status === 403) {
+        setMessage("Your session expired. Please sign in again.");
+        setBusy(false);
+        router.push(buildLoginHref("/"));
+        return;
+      }
+
+      if (prepResponse.ok) {
+        const prepared = (await prepResponse.json()) as {
+          jobId: string;
+          uploads: Array<{
+            index: number;
+            key: string;
+            path: string;
+            signedUrl: string;
+            name: string;
+            type: string;
+            size: number;
+          }>;
+        };
+
+        setMessage(`Uploading ${files.length} photo${files.length > 1 ? "s" : ""}...`);
+        const concurrency = 3;
+        let cursor = 0;
+        const uploadWorker = async () => {
+          while (true) {
+            const idx = cursor;
+            cursor += 1;
+            if (idx >= prepared.uploads.length) return;
+            const target = prepared.uploads[idx];
+            const file = files[target.index];
+            const putRes = await fetch(target.signedUrl, {
+              method: "PUT",
+              headers: {
+                "Content-Type": target.type || file.type || "image/jpeg",
+              },
+              body: file,
+            });
+            if (!putRes.ok) {
+              throw new Error(`Upload failed for ${file.name} (${putRes.status})`);
+            }
+          }
+        };
+        await Promise.all(
+          Array.from({ length: Math.min(concurrency, prepared.uploads.length) }, uploadWorker)
+        );
+
+        setMessage("Creating the job...");
+        createResponse = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobId: prepared.jobId,
+            files: prepared.uploads.map((u) => ({
+              key: u.key,
+              name: u.name,
+              type: u.type,
+              size: u.size,
+            })),
+            aspectRatio: selectedRatio,
+            styleId: selectedStyle,
+            resolution: selectedResolution,
+            ...(hasEdits ? { editRequests: trimmedEdits } : {}),
+          }),
+        });
+      } else if (prepResponse.status === 501) {
+        // Fallback for non-Supabase local dev mode.
+        setMessage("Creating the job...");
+        const fd = new FormData();
+        for (const f of files) fd.append("images", f);
+        fd.append("aspectRatio", selectedRatio);
+        fd.append("styleId", selectedStyle);
+        fd.append("resolution", selectedResolution);
+        if (hasEdits) fd.append("editRequests", JSON.stringify(trimmedEdits));
+        createResponse = await fetch("/api/jobs", { method: "POST", body: fd });
+      } else {
+        throw new Error(await prepResponse.text());
+      }
+
       if (createResponse.status === 401 || createResponse.status === 403) {
         setMessage("Your session expired. Please sign in again.");
         setBusy(false);

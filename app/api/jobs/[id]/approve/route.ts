@@ -1,9 +1,10 @@
 import { after, NextResponse } from "next/server";
 import { requireOwnedJob } from "../../../../../lib/jobs/ownership";
+import { claimJobExecution } from "../../../../../lib/jobs/store";
 import { runVideoPhase } from "../../../../../lib/jobs/workflow";
-import { regeneratingFrames } from "../../../../../lib/jobs/regenState";
+import { recordReviewDecisions } from "../../../../../lib/jobs/judgements";
 
-const runningJobs = new Set<string>();
+export const maxDuration = 300;
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -11,33 +12,41 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
   if (result.response) {
     return result.response;
   }
-  const { job } = result;
-  if (job.status !== "awaiting_review") {
-    return new NextResponse("Job is not in review state", { status: 409 });
+
+  // Atomic DB-level claim: enforces status === awaiting_review AND no active frame regens
+  // across all Vercel Serverless instances (replaces process-local Sets).
+  const claim = await claimJobExecution(id, {
+    allowedStatuses: ["awaiting_review"],
+    requireNoActiveFrameRegen: true,
+  });
+
+  if (!claim.claimed || !claim.job) {
+    return new NextResponse(claim.reason ?? "Job is not in review state", { status: 409 });
   }
 
-  const anyRunning = job.steps.some((s) => s.kind === "image" && s.status === "running");
-  if (anyRunning) {
-    return new NextResponse("Some frames are still regenerating — wait for them to finish", { status: 409 });
-  }
+  const job = claim.job;
+  const now = new Date().toISOString();
+  await recordReviewDecisions(
+    id,
+    job.generatedFrames.map((_, frameIndex) => {
+      const verdict = job.frameJudgements?.[frameIndex] ?? null;
+      return {
+        frameIndex,
+        decision: "kept" as const,
+        score: verdict?.consistencyScore ?? null,
+        passed: verdict?.passed ?? null,
+        at: now,
+      };
+    })
+  );
 
-  const anyPending = [...regeneratingFrames].some((k) => k.startsWith(`${id}:`));
-  if (anyPending) {
-    return new NextResponse("Some frames are still regenerating", { status: 409 });
-  }
-
-  if (!runningJobs.has(id)) {
-    runningJobs.add(id);
-    after(async () => {
-      try {
-        await runVideoPhase(id);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        runningJobs.delete(id);
-      }
-    });
-  }
+  after(async () => {
+    try {
+      await runVideoPhase(id);
+    } catch (error) {
+      console.error(`[approve] job ${id} failed:`, error);
+    }
+  });
 
   return NextResponse.json({ id, status: "running" }, { status: 202 });
 }

@@ -1,0 +1,86 @@
+/* Structural-consistency judge UI for the review grid. Phase 1. */
+
+.score-badge {
+  position: absolute;
+  top: var(--space-xs);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  padding: var(--space-xxs) var(--space-xs);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--panel);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
+}
+
+.pass { background-color: var(--accent-strong); }
+.fail { background-color: var(--danger); }
+.pending { background-color: var(--muted); }
+
+.score-num { font-variant-numeric: tabular-nums; }
+
+.score-flag {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* Judge findings, shown inside the edit panel when a tile is selected. */
+.findings {
+  margin: 0 0 var(--space-base);
+  padding: var(--space-sm) var(--space-base);
+  border-radius: var(--radius-md);
+  background-color: var(--canvas);
+  border: 1px solid var(--line);
+}
+
+.findings-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-xs);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.head-score-pass { color: var(--accent-strong); }
+.head-score-fail { color: var(--danger); }
+
+.sub-scores {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.rationale {
+  margin: 0 0 var(--space-xs);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.issue-list {
+  margin: 0;
+  padding: 0 0 0 var(--space-base);
+}
+
+.issue-list li {
+  margin: 0 0 var(--space-xxs);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.no-issues {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+}

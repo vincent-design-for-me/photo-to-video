@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -10,25 +10,24 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const supabaseRef = useRef(createClient());
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSuccess("");
     setLoading(true);
 
-    const { error } = await supabaseRef.current.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    const { error } = await authClient.requestPasswordReset({
+      email,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) {
-      setError(error.message);
+      setError(error.message ?? "Could not send password reset email");
       setLoading(false);
       return;
     }
 
-    setSuccess("Check your email for a password reset link.");
+    setSuccess("If an account exists for that email, a password reset link has been sent.");
     setLoading(false);
   }
 

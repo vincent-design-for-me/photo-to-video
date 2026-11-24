@@ -2,7 +2,7 @@ import { createReadStream, statSync } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireOwnedJob } from "../../../../../../lib/jobs/ownership";
-import { isSupabaseMode } from "../../../../../../lib/supabase";
+import { isR2Configured } from "../../../../../../lib/cloudflare/config";
 import { getSignedUrl } from "../../../../../../lib/jobs/storage";
 
 export async function GET(
@@ -18,7 +18,7 @@ export async function GET(
   const clipPath = job.generatedClips[clipIndex];
   if (!clipPath) return new NextResponse("Clip not found", { status: 404 });
 
-  if (isSupabaseMode()) {
+  if (isR2Configured()) {
     const url = await getSignedUrl(clipPath);
     return NextResponse.redirect(url);
   }

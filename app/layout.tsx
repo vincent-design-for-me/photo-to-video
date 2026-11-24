@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { EB_Garamond, Inter } from "next/font/google";
 import Navbar from "./components/Navbar";
-import { createServerClient } from "@/lib/supabase/server";
+import { getServerUser } from "@/lib/auth/session";
 import "./styles.css";
 
 const ebGaramond = EB_Garamond({
@@ -24,10 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerUser();
 
   return (
     <html lang="en" className={`${ebGaramond.variable} ${inter.variable}`}>

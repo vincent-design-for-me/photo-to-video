@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "photo-to-video",
+  "compatibility_date": "2026-04-21",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "photo-to-video",
+      "database_id": "39ead2ad-f09a-40f3-973f-c0996a100f8f"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "photo-to-video-assets"
+    }
+  ]
+}

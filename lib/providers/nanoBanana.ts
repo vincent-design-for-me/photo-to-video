@@ -1,18 +1,8 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fetchWithRetry } from "../http/fetchWithRetry";
 import { buildGeminiGenerateContentUrl, extractGeminiInlineImageData, getImageGenerationConfig, getLLMConfig, readGeminiJsonResponse } from "./geminiCompat";
 import type { ImageGenerationConfig } from "./geminiCompat";
-
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3, delayMs = 5000): Promise<Response> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, options);
-    if (response.ok || ![429, 503, 504].includes(response.status)) return response;
-    if (attempt === maxRetries) return response;
-    console.log(`[nanoBanana] attempt ${attempt}/${maxRetries} got ${response.status}, retrying in ${delayMs / 1000}s...`);
-    await new Promise((r) => setTimeout(r, delayMs));
-  }
-  return fetch(url, options);
-}
 
 type GenerateInteriorFrameInput = {
   jobId: string;
@@ -23,11 +13,18 @@ type GenerateInteriorFrameInput = {
   outputPath: string;
 };
 
+function allowPreviewFallback(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.ALLOW_PREVIEW_FALLBACK === "true";
+}
+
 export async function generateInteriorFrame(input: GenerateInteriorFrameInput): Promise<string> {
   await mkdir(path.dirname(input.outputPath), { recursive: true });
   const config = getImageGenerationConfig();
 
   if (!config.apiKey) {
+    if (!allowPreviewFallback()) {
+      throw new Error("IMAGE_API_KEY is not configured in production.");
+    }
     await copyFile(input.sourceImagePath, input.outputPath);
     return input.outputPath;
   }
@@ -71,7 +68,12 @@ export async function generateInteriorFrame(input: GenerateInteriorFrameInput): 
       })
     };
 
-    const response = await fetchWithRetry(imageUrl, requestOptions);
+    const response = await fetchWithRetry(imageUrl, requestOptions, {
+      timeoutMs: 120_000,
+      maxAttempts: 3,
+      baseDelayMs: 3000,
+      label: "nanoBanana:gemini"
+    });
     const parsed = await readGeminiJsonResponse(response);
     const data = extractGeminiInlineImageData(parsed);
     if (!data) {
@@ -123,21 +125,30 @@ async function generateFrameOpenAIImages(
   const base64Data = imageData.toString("base64");
   const resolution = input.resolution === "4k" ? "4k" : "2k";
 
-  const genResponse = await fetchWithRetry(`${baseUrl}/images/generations`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey ?? ""}`
+  const genResponse = await fetchWithRetry(
+    `${baseUrl}/images/generations`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey ?? ""}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        prompt: input.prompt,
+        resolution,
+        aspect_ratio: input.aspectRatio,
+        reference_images: [`data:${mimeType};base64,${base64Data}`],
+        response_format: "url"
+      })
     },
-    body: JSON.stringify({
-      model: config.model,
-      prompt: input.prompt,
-      resolution,
-      aspect_ratio: input.aspectRatio,
-      reference_images: [`data:${mimeType};base64,${base64Data}`],
-      response_format: "url"
-    })
-  });
+    {
+      timeoutMs: 120_000,
+      maxAttempts: 3,
+      baseDelayMs: 3000,
+      label: "nanoBanana:openai-images"
+    }
+  );
 
   if (!genResponse.ok) {
     const body = await genResponse.text();
@@ -150,9 +161,18 @@ async function generateFrameOpenAIImages(
     throw new Error(`OpenAI image endpoint did not return a URL. Response: ${JSON.stringify(parsed).slice(0, 400)}`);
   }
 
-  const dlResponse = await fetch(resultUrl, {
-    headers: { Authorization: `Bearer ${config.apiKey ?? ""}` }
-  });
+  const dlResponse = await fetchWithRetry(
+    resultUrl,
+    {
+      headers: { Authorization: `Bearer ${config.apiKey ?? ""}` }
+    },
+    {
+      timeoutMs: 60_000,
+      maxAttempts: 3,
+      baseDelayMs: 1500,
+      label: "nanoBanana:download"
+    }
+  );
   if (!dlResponse.ok) {
     throw new Error(`Failed to download generated image (${dlResponse.status}): ${resultUrl}`);
   }
@@ -182,29 +202,38 @@ export async function generateNanoBananaPromptForImage(input: GenerateNanoBanana
         }]
       : [];
 
-    const response = await fetch(`${llm.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${llm.apiKey}`,
-        "Content-Type": "application/json"
+    const response = await fetchWithRetry(
+      `${llm.baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${llm.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: llm.model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: input.stylePrompt },
+                ...userRequestPart,
+                {
+                  type: "image_url",
+                  image_url: { url: `data:${mimeType};base64,${base64Data}` }
+                }
+              ]
+            }
+          ]
+        })
       },
-      body: JSON.stringify({
-        model: llm.model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: input.stylePrompt },
-              ...userRequestPart,
-              {
-                type: "image_url",
-                image_url: { url: `data:${mimeType};base64,${base64Data}` }
-              }
-            ]
-          }
-        ]
-      })
-    });
+      {
+        timeoutMs: 60_000,
+        maxAttempts: 3,
+        baseDelayMs: 2000,
+        label: "nanoBanana:prompt-llm"
+      }
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -213,7 +242,11 @@ export async function generateNanoBananaPromptForImage(input: GenerateNanoBanana
 
     const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const rawText = data.choices?.[0]?.message?.content ?? "";
-    return extractNanoBananaPrompt(rawText);
+    const extracted = extractNanoBananaPrompt(rawText);
+    if (!extracted) {
+      throw new Error("LLM prompt generation returned an empty prompt");
+    }
+    return extracted;
   }
 
   // Fallback: no LLM configured, append user request if provided

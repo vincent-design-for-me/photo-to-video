@@ -66,6 +66,21 @@ export function getLLMConfig(env: Record<string, string | undefined> = process.e
   return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey, model };
 }
 
+/**
+ * Config for the structural-consistency judge. Lets the judge use a stronger
+ * vision model than the prompt-gen LLM: set JUDGE_MODEL (and optionally
+ * JUDGE_LLM_BASE_URL / JUDGE_LLM_API_KEY if it lives at a different endpoint).
+ * Anything unset falls back to the corresponding LLM_* value, so leaving all
+ * JUDGE_* vars empty keeps today's behaviour (judge == prompt-gen model).
+ */
+export function getJudgeLLMConfig(env: Record<string, string | undefined> = process.env): LLMConfig | null {
+  const baseUrl = env.JUDGE_LLM_BASE_URL ?? env.LLM_BASE_URL;
+  const apiKey = env.JUDGE_LLM_API_KEY ?? env.LLM_API_KEY;
+  const model = env.JUDGE_MODEL ?? env.LLM_MODEL ?? "gpt-5.4";
+  if (!baseUrl || !apiKey) return null;
+  return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey, model };
+}
+
 export async function readGeminiJsonResponse(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   const body = await response.text();

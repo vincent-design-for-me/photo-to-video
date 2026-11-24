@@ -1,22 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const supabaseRef = useRef(createClient());
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    const urlError = params.get("error");
+    setToken(urlToken);
+    if (urlError) {
+      setError("This reset link is invalid or has expired. Please request a new one.");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!token) {
+      setError("Missing password reset token. Please use the link from your email.");
+      return;
+    }
 
     if (password !== confirm) {
       setError("Passwords do not match");
@@ -25,15 +39,19 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
 
-    const { error } = await supabaseRef.current.auth.updateUser({ password });
+    const { error } = await authClient.resetPassword({
+      newPassword: password,
+      token,
+    });
 
     if (error) {
-      setError(error.message);
+      setError(error.message ?? "Could not update password");
       setLoading(false);
       return;
     }
 
-    router.push("/");
+    router.push("/login");
+    router.refresh();
   }
 
   return (

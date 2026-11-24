@@ -1,7 +1,9 @@
 import { after, NextResponse } from "next/server";
 import { requireOwnedJob } from "../../../../../../../lib/jobs/ownership";
+import { claimFrameRegeneration } from "../../../../../../../lib/jobs/store";
 import { regenerateFrame } from "../../../../../../../lib/jobs/workflow";
-import { regeneratingFrames } from "../../../../../../../lib/jobs/regenState";
+
+export const maxDuration = 300;
 
 export async function POST(
   request: Request,
@@ -15,35 +17,28 @@ export async function POST(
     return result.response;
   }
   const { job } = result;
-  if (job.status !== "awaiting_review") {
-    return new NextResponse("Job is not in review state", { status: 409 });
-  }
   if (isNaN(frameIndex) || frameIndex < 0 || frameIndex >= job.sourceImages.length) {
     return new NextResponse("Invalid frame index", { status: 400 });
   }
 
-  const body = await request.json().catch(() => ({})) as { appendText?: string };
+  const body = (await request.json().catch(() => ({}))) as { appendText?: string };
   const appendText = body.appendText?.trim() ?? "";
   if (!appendText) {
     return new NextResponse("appendText is required", { status: 400 });
   }
 
-  const key = `${id}:${frameIndex}`;
-  const imageStep = job.steps.find((s) => s.kind === "image" && s.index === frameIndex);
-
-  // Allow recovery if server restarted mid-regen (step stuck running but no in-flight promise)
-  if (regeneratingFrames.has(key) && imageStep?.status === "running") {
-    return new NextResponse("Frame is already regenerating", { status: 409 });
+  // Atomically mark step `running`, update prompt, clear stale verdict, and record
+  // review decision BEFORE returning 202 so /approve immediately sees it across instances.
+  const claim = await claimFrameRegeneration(id, frameIndex, appendText);
+  if (!claim.claimed) {
+    return new NextResponse(claim.reason ?? "Frame cannot be regenerated", { status: 409 });
   }
 
-  regeneratingFrames.add(key);
   after(async () => {
     try {
-      await regenerateFrame(id, frameIndex, appendText);
+      await regenerateFrame(id, frameIndex, appendText, { alreadyClaimed: true });
     } catch (error) {
       console.error(`Regen frame ${frameIndex} for job ${id}:`, error);
-    } finally {
-      regeneratingFrames.delete(key);
     }
   });
 

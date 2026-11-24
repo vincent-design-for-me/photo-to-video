@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient as createServerClient } from "../supabase/server";
-import { isSupabaseMode } from "../supabase";
+import { getServerUser } from "../auth/session";
+import { isD1Configured } from "../cloudflare/config";
 import { getJob } from "./store";
 import type { VideoJob } from "./types";
 
@@ -12,15 +12,11 @@ export async function requireAuthenticatedUserId(): Promise<{
   userId?: string;
   response?: NextResponse;
 }> {
-  if (!isSupabaseMode()) {
+  if (!isD1Configured()) {
     return {};
   }
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getServerUser();
   if (!user) {
     return {
       response: new NextResponse("Unauthorized", { status: 401 }),
@@ -41,7 +37,7 @@ export async function requireOwnedJob(jobId: string): Promise<OwnedJobResult> {
     return { response: new NextResponse("Job not found", { status: 404 }) };
   }
 
-  if (isSupabaseMode() && userId && job.userId !== userId) {
+  if (isD1Configured() && userId && job.userId !== userId) {
     return { response: new NextResponse("Job not found", { status: 404 }) };
   }
 

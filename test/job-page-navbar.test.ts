@@ -13,12 +13,11 @@ test("job page does not render its own site header", () => {
 
 test("navbar can start from a server-provided logged-in user", () => {
   assert.match(navbarSource, /export default function Navbar\(\{ initialUser = null \}/);
-  assert.match(navbarSource, /useState<User \| null>\(initialUser\)/);
+  assert.match(navbarSource, /useState<AuthUser \| null>\(initialUser\)/);
 });
 
 test("layout seeds the shared navbar with the server user", () => {
-  assert.match(layoutSource, /const supabase = await createServerClient\(\)/);
-  assert.match(layoutSource, /const \{\s*data:\s*\{\s*user\s*\},\s*\}\s*=\s*await supabase\.auth\.getUser\(\)/);
+  assert.match(layoutSource, /const user = await getServerUser\(\)/);
   assert.match(layoutSource, /<Navbar initialUser=\{user\} \/>/);
 });
 

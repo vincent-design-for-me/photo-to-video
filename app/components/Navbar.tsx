@@ -3,18 +3,18 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import { authClient } from "@/lib/auth/client";
+import type { AuthUser } from "@/lib/auth/session";
 
 type NavbarProps = {
-  initialUser?: User | null;
+  initialUser?: AuthUser | null;
 };
 
 export default function Navbar({ initialUser = null }: NavbarProps) {
-  const supabaseRef = useRef(createClient());
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(initialUser);
+  const { data: sessionData, isPending } = authClient.useSession();
+  const [user, setUser] = useState<AuthUser | null>(initialUser);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
@@ -25,12 +25,17 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
   }, [initialUser]);
 
   useEffect(() => {
-    supabaseRef.current.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: { subscription } } = supabaseRef.current.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+    if (isPending) return;
+    if (sessionData?.user) {
+      setUser({
+        id: sessionData.user.id,
+        email: sessionData.user.email,
+        name: sessionData.user.name,
+      });
+    } else {
+      setUser(null);
+    }
+  }, [sessionData, isPending]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -76,13 +81,16 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? "?";
 
   async function handleSignOut() {
-    await supabaseRef.current.auth.signOut();
+    await authClient.signOut();
+    setUser(null);
+    setOpen(false);
     router.push("/login");
     router.refresh();
   }
 
   const navItems = [
     { href: "/", label: "Home" },
+    { href: "/library", label: "Library" },
     ...(user ? [{ href: "/history", label: "History" }] : []),
   ];
 

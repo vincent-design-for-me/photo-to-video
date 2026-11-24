@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireOwnedJob } from "../../../../../../lib/jobs/ownership";
-import { isSupabaseMode } from "../../../../../../lib/supabase";
+import { isR2Configured } from "../../../../../../lib/cloudflare/config";
 import { getSignedUrl } from "../../../../../../lib/jobs/storage";
 
 export async function GET(
@@ -18,7 +18,7 @@ export async function GET(
   const framePath = job.generatedFrames[frameIndex];
   if (!framePath) return new NextResponse("Frame not found", { status: 404 });
 
-  if (isSupabaseMode()) {
+  if (isR2Configured()) {
     const url = await getSignedUrl(framePath);
     return NextResponse.redirect(url);
   }

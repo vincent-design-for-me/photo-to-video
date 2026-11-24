@@ -1,12 +1,32 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_WORKFLOW_CONFIG } from "./config";
 import { getInteriorStylePrompt } from "../prompts/interiorStyles";
+import {
+  DEFAULT_STALE_REGEN_MS,
+  DEFAULT_STALE_RUNNING_MS,
+  hasActiveFrameRegeneration,
+  isJobRunningStale,
+  isTimestampStale,
+} from "./stale";
+import type { ClaimExecutionOptions, ClaimResult, JobPatch } from "./store.d1";
 import type { JobAsset, StepKind, StepStatus, VideoJob } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), ".data", "jobs");
+const localLocks = new Map<string, Promise<unknown>>();
+
+function withLocalJobLock<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = localLocks.get(jobId) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  const cleanup = next.finally(() => {
+    if (localLocks.get(jobId) === cleanup) {
+      localLocks.delete(jobId);
+    }
+  });
+  localLocks.set(jobId, cleanup);
+  return next;
+}
 
 export async function ensureJobDirs(jobId: string): Promise<string> {
   const rootDir = path.join(DATA_DIR, jobId);
@@ -28,13 +48,12 @@ function computeOutputDimensions(aspectRatio: string, resolution: string): { out
 
 export async function createJob(
   files: JobAsset[],
-  id = randomUUID(),
+  id: string = randomUUID(),
   styleId = DEFAULT_WORKFLOW_CONFIG.styleId,
   aspectRatio = DEFAULT_WORKFLOW_CONFIG.aspectRatio,
   resolution = DEFAULT_WORKFLOW_CONFIG.resolution,
   userEditRequests?: string[],
-  userId?: string,
-  _client?: SupabaseClient
+  userId?: string
 ): Promise<VideoJob> {
   const rootDir = await ensureJobDirs(id);
   const now = new Date().toISOString();
@@ -112,7 +131,146 @@ export async function getJob(jobId: string): Promise<VideoJob | null> {
 
 export async function writeJob(job: VideoJob): Promise<void> {
   await mkdir(job.rootDir, { recursive: true });
-  await writeFile(path.join(job.rootDir, "job.json"), JSON.stringify(job, null, 2));
+  const target = path.join(job.rootDir, "job.json");
+  const tmp = `${target}.${randomUUID()}.tmp`;
+  await writeFile(tmp, JSON.stringify(job, null, 2));
+  await rename(tmp, target);
+}
+
+export async function mutateJob(
+  jobId: string,
+  updater: (current: VideoJob) => JobPatch | null
+): Promise<VideoJob | null> {
+  return withLocalJobLock(jobId, async () => {
+    const current = await getJob(jobId);
+    if (!current) return null;
+    const patch = updater(current);
+    if (!patch) return current;
+
+    const updated: VideoJob = {
+      ...current,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeJob(updated);
+    return updated;
+  });
+}
+
+export async function claimJobExecution(
+  jobId: string,
+  options: ClaimExecutionOptions
+): Promise<ClaimResult> {
+  const staleAfterMs = options.staleAfterMs ?? Number(process.env.JOB_STALE_RUNNING_MS ?? DEFAULT_STALE_RUNNING_MS);
+  const regenStaleMs = Number(process.env.JOB_STALE_REGEN_MS ?? DEFAULT_STALE_REGEN_MS);
+  let rejectionReason: string | undefined;
+
+  const updated = await mutateJob(jobId, (current) => {
+    rejectionReason = undefined;
+    const statusAllowed = options.allowedStatuses.includes(current.status);
+    const staleReclaim = Boolean(options.allowStaleRunning) && isJobRunningStale(current, staleAfterMs);
+
+    if (!statusAllowed && !staleReclaim) {
+      if (current.status === "running") {
+        rejectionReason = "Job is already running";
+      } else if (current.status === "complete") {
+        rejectionReason = "Job is already complete";
+      } else if (current.status === "awaiting_review") {
+        rejectionReason = "Job is awaiting review — use POST /approve to proceed to video";
+      } else {
+        rejectionReason = `Job cannot be started from status "${current.status}"`;
+      }
+      return null;
+    }
+
+    if (options.requireNoActiveFrameRegen && hasActiveFrameRegeneration(current, regenStaleMs)) {
+      rejectionReason = "Some frames are still regenerating — wait for them to finish";
+      return null;
+    }
+
+    return {
+      status: "running",
+      error: undefined,
+    };
+  });
+
+  if (!updated) {
+    return { claimed: false, job: null, reason: "Job not found" };
+  }
+  if (rejectionReason) {
+    return { claimed: false, job: updated, reason: rejectionReason };
+  }
+  return { claimed: true, job: updated };
+}
+
+export async function claimFrameRegeneration(
+  jobId: string,
+  frameIndex: number,
+  appendText: string,
+  options?: { staleAfterMs?: number }
+): Promise<ClaimResult> {
+  const staleAfterMs = options?.staleAfterMs ?? Number(process.env.JOB_STALE_REGEN_MS ?? DEFAULT_STALE_REGEN_MS);
+  let rejectionReason: string | undefined;
+
+  const updated = await mutateJob(jobId, (current) => {
+    rejectionReason = undefined;
+    if (current.status !== "awaiting_review") {
+      rejectionReason = "Job is not in review state";
+      return null;
+    }
+
+    const imageStep = current.steps.find((s) => s.kind === "image" && s.index === frameIndex);
+    if (imageStep?.status === "running" && !isTimestampStale(imageStep.updatedAt, staleAfterMs)) {
+      rejectionReason = "Frame is already regenerating";
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const existingPrompts = current.framePrompts ?? [];
+    const basePrompt = existingPrompts[frameIndex] ?? "";
+    const newPrompt = appendText.trim() ? `${basePrompt}\n\n${appendText.trim()}` : basePrompt;
+    const updatedPrompts = [...existingPrompts];
+    updatedPrompts[frameIndex] = newPrompt;
+
+    const judgements = [...(current.frameJudgements ?? [])];
+    while (judgements.length < current.generatedFrames.length) judgements.push(null);
+    const priorVerdict = current.frameJudgements?.[frameIndex] ?? null;
+    judgements[frameIndex] = null;
+
+    const steps = current.steps.map((step) =>
+      step.kind === "image" && step.index === frameIndex
+        ? { ...step, status: "running" as const, updatedAt: now }
+        : step
+    );
+
+    const reviewDecisions = [
+      ...(current.reviewDecisions ?? []),
+      {
+        frameIndex,
+        decision: "regenerated" as const,
+        score: priorVerdict?.consistencyScore ?? null,
+        passed: priorVerdict?.passed ?? null,
+        at: now,
+        appendText: appendText.trim(),
+      },
+    ];
+
+    return {
+      framePrompts: updatedPrompts,
+      frameJudgements: judgements,
+      reviewDecisions,
+      steps,
+      error: undefined,
+    };
+  });
+
+  if (!updated) {
+    return { claimed: false, job: null, reason: "Job not found" };
+  }
+  if (rejectionReason) {
+    return { claimed: false, job: updated, reason: rejectionReason };
+  }
+  return { claimed: true, job: updated };
 }
 
 export async function updateJobStep(
@@ -122,17 +280,17 @@ export async function updateJobStep(
   status: StepStatus,
   outputPath?: string
 ): Promise<void> {
-  const job = await getJob(jobId);
-  if (!job) throw new Error(`Job ${jobId} was not found`);
-  await writeJob({
-    ...job,
-    updatedAt: new Date().toISOString(),
-    steps: job.steps.map((step) =>
-      step.kind === kind && step.index === index
-        ? { ...step, status, outputPath, updatedAt: new Date().toISOString() }
-        : step
-    )
+  const result = await mutateJob(jobId, (job) => {
+    const now = new Date().toISOString();
+    return {
+      steps: job.steps.map((step) =>
+        step.kind === kind && step.index === index
+          ? { ...step, status, ...(outputPath !== undefined ? { outputPath } : {}), updatedAt: now }
+          : step
+      ),
+    };
   });
+  if (!result) throw new Error(`Job ${jobId} was not found`);
 }
 
 export async function buildJobAsset(filePath: string, name: string, type: string, size?: number): Promise<JobAsset> {
