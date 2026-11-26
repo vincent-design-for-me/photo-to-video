@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["sin1"]
+  "regions": ["sin1"],
+  "installCommand": "printf '@hugeicons-pro:registry=https://npm.collectui.pro\\n//npm.collectui.pro/:_authToken=%s\\n' \"$HUGEICONS_NPM_TOKEN\" > \"$HOME/.npmrc\" && npm install"
 }
