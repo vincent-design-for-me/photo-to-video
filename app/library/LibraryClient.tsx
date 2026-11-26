@@ -2,6 +2,14 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Image from "next/image";
+import {
+  Cancel01Icon,
+  Copy01Icon,
+  Search01Icon,
+  Tick02Icon,
+} from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
+import styles from "./LibraryClient.module.css";
 
 export interface PromptEntry {
   id: string;
@@ -130,11 +138,12 @@ function PromptCard({
         <h3 className="prompt-card-title">{entry.title}</h3>
         <div className="prompt-card-footer">
           <button
-            className="btn-copy"
+            className={`btn-copy ${styles["icon-inline-btn"]}`}
             onClick={onCopy}
             type="button"
           >
-            {isCopied ? "Copied!" : "Copy"}
+            <Icon icon={Copy01Icon} altIcon={Tick02Icon} showAlt={isCopied} size={13} />
+            <span>{isCopied ? "Copied!" : "Copy"}</span>
           </button>
           <span className="prompt-card-scene">{entry.scene}</span>
         </div>
@@ -178,7 +187,7 @@ function DetailModal({
     >
       <div className="library-modal-inner">
         <button className="modal-close-btn" onClick={onClose} aria-label="Close">
-          ×
+          <Icon icon={Cancel01Icon} size={16} strokeWidth={1.75} />
         </button>
         <div className="modal-image-pane">
           <Image
@@ -199,11 +208,12 @@ function DetailModal({
           <h2 className="modal-title">{entry.title}</h2>
           <pre className="modal-prompt-text">{entry.prompt}</pre>
           <button
-            className={`btn-primary-pill${isCopied ? " copied" : ""}`}
+            className={`btn-primary-pill ${styles["icon-inline-btn"]}${isCopied ? " copied" : ""}`}
             onClick={onCopy}
             type="button"
           >
-            {isCopied ? "Copied!" : "Copy Prompt"}
+            <Icon icon={Copy01Icon} altIcon={Tick02Icon} showAlt={isCopied} size={15} />
+            <span>{isCopied ? "Copied!" : "Copy Prompt"}</span>
           </button>
         </div>
       </div>
@@ -276,10 +286,7 @@ export default function LibraryClient({ prompts }: { prompts: PromptEntry[] }) {
       <section className="library-filters">
         <div className="library-search-row">
           <div className="library-search-wrap">
-            <svg className="search-icon" viewBox="0 0 16 16" fill="none">
-              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <Icon icon={Search01Icon} size={15} className="search-icon" />
             <input
               type="search"
               className="library-search"
@@ -289,7 +296,7 @@ export default function LibraryClient({ prompts }: { prompts: PromptEntry[] }) {
             />
             {query && (
               <button className="search-clear" onClick={() => setQuery("")} type="button" aria-label="Clear search">
-                ×
+                <Icon icon={Cancel01Icon} size={14} />
               </button>
             )}
           </div>

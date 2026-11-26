@@ -4,18 +4,21 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
-  ArrowRight,
-  BookOpen,
-  Download,
-  Film,
-  History,
-  LayoutGrid,
-  List,
-  Loader2,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react";
+  AiMagicIcon,
+  Alert02Icon,
+  ArrowRight02Icon,
+  BookOpen02Icon,
+  CheckmarkBadge02Icon,
+  ClapperboardIcon,
+  Download04Icon,
+  GridViewIcon,
+  LeftToRightListDashIcon,
+  Loading03Icon,
+  Search01Icon,
+  VideoReplayIcon,
+  Cancel01Icon,
+} from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
 import { StylePickerGrid } from "./StylePickerGrid";
 import type { WorkspaceJobSummary } from "./types";
 import styles from "./WorkspaceCanvas.module.css";
@@ -192,12 +195,12 @@ export function WorkspaceCanvas({
         <div className={styles.topbar}>
           <Tabs.List className={styles["tab-list"]} aria-label="Workspace views">
             <Tabs.Trigger value="history" className={styles["tab-trigger"]}>
-              <History size={14} aria-hidden="true" />
+              <Icon icon={VideoReplayIcon} size={15} />
               <span>History</span>
               <span className={styles["tab-badge"]}>{jobs.length}</span>
             </Tabs.Trigger>
             <Tabs.Trigger value="guide" className={styles["tab-trigger"]}>
-              <BookOpen size={14} aria-hidden="true" />
+              <Icon icon={BookOpen02Icon} size={15} />
               <span>How it works</span>
             </Tabs.Trigger>
           </Tabs.List>
@@ -211,7 +214,7 @@ export function WorkspaceCanvas({
                 aria-label="List view"
                 title="List view"
               >
-                <List size={15} />
+                <Icon icon={LeftToRightListDashIcon} size={15} />
               </button>
               <button
                 type="button"
@@ -220,7 +223,7 @@ export function WorkspaceCanvas({
                 aria-label="Grid view"
                 title="Grid view"
               >
-                <LayoutGrid size={15} />
+                <Icon icon={GridViewIcon} size={15} />
               </button>
             </div>
           )}
@@ -249,7 +252,7 @@ export function WorkspaceCanvas({
             </div>
 
             <div className={styles["search-wrap"]}>
-              <Search size={14} className={styles["search-icon"]} aria-hidden="true" />
+              <Icon icon={Search01Icon} size={14} className={styles["search-icon"]} />
               <input
                 type="text"
                 className={styles["search-input"]}
@@ -265,7 +268,7 @@ export function WorkspaceCanvas({
                   onClick={() => setQuery("")}
                   aria-label="Clear search"
                 >
-                  <X size={13} aria-hidden="true" />
+                  <Icon icon={Cancel01Icon} size={13} />
                 </button>
               )}
             </div>
@@ -276,12 +279,12 @@ export function WorkspaceCanvas({
           <Tabs.Content value="history">
             {loadingJobs && jobs.length === 0 ? (
               <div className={styles["empty-history"]}>
-                <Loader2 size={22} className={styles.spinner} aria-hidden="true" />
+                <Icon icon={Loading03Icon} size={22} className={styles.spinner} />
                 <p className={styles["empty-history-sub"]}>Loading your recent projects…</p>
               </div>
             ) : jobs.length === 0 ? (
               <div className={styles["empty-history"]}>
-                <Film size={28} aria-hidden="true" />
+                <Icon icon={ClapperboardIcon} size={30} />
                 <h2 className={styles["empty-history-title"]}>No generated videos yet</h2>
                 <p className={styles["empty-history-sub"]}>
                   Drop 1–6 room photos in the left panel, choose an interior style, and hit Generate Video.
@@ -327,14 +330,14 @@ export function WorkspaceCanvas({
                           <img src={preview.src} alt={job.config.style} className={styles["job-media-el"]} />
                         ) : (
                           <div className={styles["job-media-placeholder"]}>
-                            <Sparkles size={22} aria-hidden="true" />
+                            <Icon icon={AiMagicIcon} size={22} />
                             <span>Preparing workspace…</span>
                           </div>
                         )}
 
                         {isGenerating && (
                           <div className={styles["generating-overlay"]}>
-                            <Loader2 size={20} className={styles.spinner} aria-hidden="true" />
+                            <Icon icon={Loading03Icon} size={20} className={styles.spinner} />
                             <span>Generating…</span>
                           </div>
                         )}
@@ -344,7 +347,9 @@ export function WorkspaceCanvas({
                         <div className={styles["job-meta-top"]}>
                           <div className={styles["job-status-row"]}>
                             <span className={`${styles["status-badge"]} ${statusClass(job.status)}`}>
-                              {isGenerating && <Loader2 size={11} className={styles.spinner} aria-hidden="true" />}
+                              {isGenerating && <Icon icon={Loading03Icon} size={11} className={styles.spinner} />}
+                              {job.status === "complete" && <Icon icon={CheckmarkBadge02Icon} size={12} />}
+                              {job.status === "failed" && <Icon icon={Alert02Icon} size={12} />}
                               {statusLabel(job.status)}
                             </span>
                             <span className={styles["job-date"]}>{formatDate(job.createdAt)}</span>
@@ -379,14 +384,14 @@ export function WorkspaceCanvas({
                         <div className={styles["job-meta-footer"]}>
                           <Link href={`/jobs/${job.id}`} className={styles["job-cta"]}>
                             <span>{primaryCtaLabel(job.status)}</span>
-                            <ArrowRight size={14} aria-hidden="true" />
+                            <Icon icon={ArrowRight02Icon} size={14} strokeWidth={1.75} />
                           </Link>
                           {job.status === "complete" && job.finalVideoPath && (
                             <a
                               href={`/api/jobs/${job.id}/download?download=1`}
                               className={styles["job-cta-outline"]}
                             >
-                              <Download size={13} aria-hidden="true" />
+                              <Icon icon={Download04Icon} size={13} />
                               MP4
                             </a>
                           )}
@@ -410,12 +415,12 @@ export function WorkspaceCanvas({
                           <img src={preview.src} alt={job.config.style} className={styles["job-media-el"]} />
                         ) : (
                           <div className={styles["job-media-placeholder"]}>
-                            <Sparkles size={20} aria-hidden="true" />
+                            <Icon icon={AiMagicIcon} size={20} />
                           </div>
                         )}
                         {isGenerating && (
                           <div className={styles["generating-overlay"]}>
-                            <Loader2 size={18} className={styles.spinner} aria-hidden="true" />
+                            <Icon icon={Loading03Icon} size={18} className={styles.spinner} />
                             <span>Generating…</span>
                           </div>
                         )}
@@ -423,6 +428,9 @@ export function WorkspaceCanvas({
                       <div className={styles["grid-card-body"]}>
                         <div className={styles["job-status-row"]}>
                           <span className={`${styles["status-badge"]} ${statusClass(job.status)}`}>
+                            {isGenerating && <Icon icon={Loading03Icon} size={11} className={styles.spinner} />}
+                            {job.status === "complete" && <Icon icon={CheckmarkBadge02Icon} size={12} />}
+                            {job.status === "failed" && <Icon icon={Alert02Icon} size={12} />}
                             {statusLabel(job.status)}
                           </span>
                           <span className={styles["job-date"]}>{formatDate(job.createdAt)}</span>
@@ -474,7 +482,7 @@ export function WorkspaceCanvas({
                 </div>
                 <Link href="/library" className={styles["guide-banner-link"]}>
                   <span>Browse Prompt Library</span>
-                  <ArrowRight size={14} aria-hidden="true" />
+                  <Icon icon={ArrowRight02Icon} size={14} strokeWidth={1.75} />
                 </Link>
               </div>
             </div>

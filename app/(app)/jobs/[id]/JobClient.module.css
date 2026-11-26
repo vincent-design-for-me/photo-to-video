@@ -84,3 +84,16 @@
   font-size: 13px;
   color: var(--accent-strong);
 }
+
+.icon-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xxs);
+}
+
+.step-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+}

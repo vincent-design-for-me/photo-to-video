@@ -1,0 +1,41 @@
+/* Placeholder bars for the job page loading state. Layout and glass styling
+   come from the shared job-page classes; only the skeleton pieces live here. */
+
+.bar {
+  display: block;
+  border-radius: var(--radius-sm);
+  background-color: var(--panel);
+  opacity: 0.16;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* Stands in for the "Job ID: …" line (14px text at 1.5 line-height). */
+.line {
+  width: 300px;
+  max-width: 100%;
+  height: 13px;
+  margin: var(--space-xxs) 0;
+}
+
+/* Stands in for a status value (18px bold). */
+.value {
+  width: 56px;
+  height: 22px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+
+  50% {
+    opacity: 0.28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+}

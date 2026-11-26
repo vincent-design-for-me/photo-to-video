@@ -1,8 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  AiImageIcon,
+  AiMagicIcon,
+  AiVideoIcon,
+  Alert02Icon,
+  ArrowLeftRightIcon,
+  ArrowRight02Icon,
+  Cancel01Icon,
+  CheckmarkBadge02Icon,
+  ClapperboardIcon,
+  Download04Icon,
+  RefreshIcon,
+  ZoomInAreaIcon,
+} from "@hugeicons-pro/core-stroke-rounded";
+import { Icon, type IconSvgElement } from "@/app/components/Icon";
 import { isJobRunningStale, isTimestampStale } from "@/lib/jobs/stale";
 import styles from "./JobClient.module.css";
+
+const STEP_KIND_ICONS: Record<JobStep["kind"], IconSvgElement> = {
+  prompt: AiMagicIcon,
+  image: AiImageIcon,
+  video: AiVideoIcon,
+  render: ClapperboardIcon,
+};
 
 function BeforeAfterSlider({
   beforeSrc,
@@ -80,10 +102,7 @@ function BeforeAfterSlider({
         onMouseDown={(e) => { e.stopPropagation(); onDragStart(e); }}
       >
         <div className="ba-handle">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M8 6l-6 6 6 6" />
-            <path d="M16 6l6 6-6 6" />
-          </svg>
+          <Icon icon={ArrowLeftRightIcon} size={18} strokeWidth={2} />
         </div>
       </div>
       <span className="ba-chip ba-chip-left">Before</span>
@@ -333,16 +352,8 @@ export default function JobClient({
 
   return (
     <div className="page">
-      <video
-        className="bg-video"
-        src="/bg.mp4"
-        autoPlay
-        muted
-        loop
-        playsInline
-        aria-hidden="true"
-      />
-      <div className="bg-video-overlay" aria-hidden="true" />
+      {/* The background video and its overlay live in ./layout.tsx so they
+          persist across the loading state instead of restarting with the page. */}
       <div id="mouse-particles" aria-hidden="true" />
 
       <main className="job-main">
@@ -354,12 +365,16 @@ export default function JobClient({
           </div>
           <div className="actions">
             {job?.status === "failed" || isStaleRunning ? (
-              <button className="job-action" onClick={retry} disabled={retrying}>
-                {retrying ? "Resuming…" : isStaleRunning ? "Resume" : "Retry"}
+              <button className={`job-action ${styles["icon-inline"]}`} onClick={retry} disabled={retrying}>
+                <Icon icon={RefreshIcon} size={15} />
+                <span>{retrying ? "Resuming…" : isStaleRunning ? "Resume" : "Retry"}</span>
               </button>
             ) : null}
             {job?.status === "complete" ? (
-              <a className="job-action" href={`/api/jobs/${id}/download?download=1`}>Download MP4</a>
+              <a className={`job-action ${styles["icon-inline"]}`} href={`/api/jobs/${id}/download?download=1`}>
+                <Icon icon={Download04Icon} size={15} />
+                <span>Download MP4</span>
+              </a>
             ) : null}
           </div>
         </div>
@@ -397,11 +412,21 @@ export default function JobClient({
                 <p className="fineprint">Click any image to edit its prompt. Select a tile, describe changes, and hit Regenerate.</p>
               </div>
               <button
-                className="review-approve-btn"
+                className={`review-approve-btn ${styles["icon-inline"]}`}
                 onClick={approveAndGenerate}
                 disabled={anyFrameRunning || approving}
               >
-                {approving ? "Starting…" : anyFrameRunning ? "Waiting for edits…" : "Generate Video →"}
+                {approving ? (
+                  "Starting…"
+                ) : anyFrameRunning ? (
+                  "Waiting for edits…"
+                ) : (
+                  <>
+                    <Icon icon={AiVideoIcon} size={16} strokeWidth={1.75} />
+                    <span>Generate Video</span>
+                    <Icon icon={ArrowRight02Icon} size={15} strokeWidth={1.75} />
+                  </>
+                )}
               </button>
             </div>
 
@@ -445,12 +470,7 @@ export default function JobClient({
                             setLightbox({ index: i, kind: "before" });
                           }}
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <circle cx="11" cy="11" r="7" />
-                            <path d="m20 20-3.5-3.5" />
-                            <path d="M11 8v6" />
-                            <path d="M8 11h6" />
-                          </svg>
+                          <Icon icon={ZoomInAreaIcon} size={16} strokeWidth={1.75} />
                         </button>
                         <button
                           type="button"
@@ -462,12 +482,7 @@ export default function JobClient({
                             setLightbox({ index: i, kind: "after" });
                           }}
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <circle cx="11" cy="11" r="7" />
-                            <path d="m20 20-3.5-3.5" />
-                            <path d="M11 8v6" />
-                            <path d="M8 11h6" />
-                          </svg>
+                          <Icon icon={ZoomInAreaIcon} size={16} strokeWidth={1.75} />
                         </button>
                       </>
                     )}
@@ -477,10 +492,13 @@ export default function JobClient({
                           className={`${styles["score-badge"]} ${judgement.passed ? styles.pass : styles.fail}`}
                           title={judgement.rationale}
                         >
+                          {judgement.passed && <Icon icon={CheckmarkBadge02Icon} size={13} strokeWidth={1.8} />}
                           <span className={styles["score-num"]}>{judgement.consistencyScore}</span>
                           consistency
                           {judgement.flaggedIssues.length > 0 && (
-                            <span className={styles["score-flag"]}>· ⚠ {judgement.flaggedIssues.length}</span>
+                            <span className={`${styles["score-flag"]} ${styles["icon-inline"]}`}>
+                              · <Icon icon={Alert02Icon} size={12} strokeWidth={1.8} /> {judgement.flaggedIssues.length}
+                            </span>
                           )}
                         </span>
                       ) : job.judgeEnabled !== false && !isTimestampStale(imageStep?.updatedAt ?? job.updatedAt, JUDGE_PENDING_WINDOW_MS) ? (
@@ -631,7 +649,10 @@ export default function JobClient({
               <div className="step" key={step.id}>
                 <span className={`pill ${step.status}`}>{step.status}</span>
                 <strong>{step.label}</strong>
-                <span className="fineprint">{step.kind}</span>
+                <span className={`fineprint ${styles["step-kind"]}`}>
+                  <Icon icon={STEP_KIND_ICONS[step.kind]} size={14} />
+                  <span>{step.kind}</span>
+                </span>
               </div>
             ))}
           </div>
@@ -652,7 +673,7 @@ export default function JobClient({
             aria-label="Close enlarged view"
             onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
           >
-            ×
+            <Icon icon={Cancel01Icon} size={20} strokeWidth={1.75} />
           </button>
           <div
             className="lightbox-figure"

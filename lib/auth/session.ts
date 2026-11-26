@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { getAuth } from "./server";
 
@@ -17,7 +18,9 @@ function hasSessionCookieHeader(cookieHeader: string | null): boolean {
   return SESSION_COOKIE_NAMES.some((name) => cookieHeader.includes(`${name}=`));
 }
 
-export async function getServerUser(): Promise<AuthUser | null> {
+// Wrapped in React `cache` so a layout and a page that both need the user
+// during the same server render share one session read instead of two.
+export const getServerUser = cache(async (): Promise<AuthUser | null> => {
   // Call headers() outside try/catch so Next.js always knows the route is dynamic
   // and never statically prerenders authenticated pages with user=null.
   const reqHeaders = await headers();
@@ -39,4 +42,4 @@ export async function getServerUser(): Promise<AuthUser | null> {
     console.warn("[auth] Failed to read server session:", error instanceof Error ? error.message : error);
     return null;
   }
-}
+});

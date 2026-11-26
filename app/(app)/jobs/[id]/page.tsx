@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import JobClient from "./JobClient";
-import { requireOwnedJob } from "../../../lib/jobs/ownership";
-import { getJudgeLLMConfig } from "../../../lib/providers/geminiCompat";
+import { requireOwnedJob } from "@/lib/jobs/ownership";
+import { getJudgeLLMConfig } from "@/lib/providers/geminiCompat";
 
 export default async function JobPage({
   params,

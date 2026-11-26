@@ -11,6 +11,9 @@ const DEFAULT_TRUSTED_ORIGINS = [
   "https://photo-to-video-git-main-vincent-design-for-mes-projects.vercel.app",
 ];
 
+/** How long a signed session cookie is trusted before D1 is consulted again. */
+const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
+
 function resolveBaseURL(): string {
   const configured = process.env.BETTER_AUTH_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
@@ -162,11 +165,27 @@ function buildAuthInstance() {
         await sendResetPasswordEmail(user.email, url);
       },
     },
+    session: {
+      // Keep a signed copy of the session in a short-lived cookie so most session
+      // checks are verified locally instead of costing a D1 round-trip.
+      // Trade-off: a session revoked from another device stays usable until this
+      // cache expires. Pass `disableCookieCache` on checks that must be exact.
+      cookieCache: {
+        enabled: true,
+        maxAge: SESSION_COOKIE_CACHE_SECONDS,
+      },
+    },
     rateLimit: {
       enabled: true,
       storage: "database",
+      customRules: {
+        // Read-only and requested on every page load and tab focus. Counting it
+        // in D1 added two extra queries per call; sign-in, sign-up and password
+        // reset keep their database-backed limits.
+        "/get-session": false,
+      },
     },
-    // Minimal surface area: only nextCookies (no cookieCache / SSO / org plugins).
+    // Minimal surface area: only nextCookies (no SSO / org plugins).
     plugins: [nextCookies()],
   });
 }

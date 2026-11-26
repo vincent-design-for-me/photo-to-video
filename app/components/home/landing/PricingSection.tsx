@@ -2,54 +2,94 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Tick02Icon } from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
 import { PRICING_PLANS } from "./landingData";
+import styles from "./LandingPage.module.css";
 
 export function PricingSection() {
-  const [pricingAnnual, setPricingAnnual] = useState(false);
+  const [annual, setAnnual] = useState(false);
 
   return (
-    <section className="lp-section" id="pricing">
-      <div className="lp-container">
-        <span className="lp-label">Pricing</span>
-        <h2 className="lp-display-lg">Plans for everyone</h2>
-        <p className="lp-section-sub">Start free. Upgrade as you grow.</p>
-        <div className="lp-pricing-toggle">
+    <section className={styles["pricing-section"]} id="pricing">
+      <div className={styles["section-header"]}>
+        <span className={styles["section-pill"]}>Pricing</span>
+        <h2 className={styles["section-title"]}>Plans That Suit You</h2>
+
+        <div className={styles["billing-toggle"]} role="group" aria-label="Billing interval">
           <button
-            className={`lp-toggle-btn${!pricingAnnual ? " lp-toggle-btn--active" : ""}`}
-            onClick={() => setPricingAnnual(false)}
-          >Monthly</button>
+            type="button"
+            className={`${styles["billing-btn"]} ${!annual ? styles["billing-btn-active"] : ""}`}
+            onClick={() => setAnnual(false)}
+          >
+            Monthly
+          </button>
           <button
-            className={`lp-toggle-btn${pricingAnnual ? " lp-toggle-btn--active" : ""}`}
-            onClick={() => setPricingAnnual(true)}
-          >Annual <span className="lp-toggle-save">Save 20%</span></button>
+            type="button"
+            className={`${styles["billing-btn"]} ${annual ? styles["billing-btn-active"] : ""}`}
+            onClick={() => setAnnual(true)}
+          >
+            <span>Annual</span>
+            <span className={styles["billing-save"]}>Save 20%</span>
+          </button>
         </div>
-        <div className="lp-pricing-grid">
-          {PRICING_PLANS.map(plan => (
-            <div key={plan.name} className={`lp-pricing-card${plan.featured ? " lp-pricing-card--featured" : ""}`}>
-              {plan.featured && <span className="lp-pricing-badge">Most popular</span>}
-              <h3 className="lp-pricing-name">{plan.name}</h3>
-              <div className="lp-pricing-price">
-                <span className="lp-pricing-amount">{pricingAnnual ? plan.annualPrice : plan.monthlyPrice}</span>
-                <span className="lp-pricing-per">/mo</span>
+      </div>
+
+      <div className={styles["pricing-shell"]}>
+        {PRICING_PLANS.map((plan) => {
+          const price = annual ? plan.annualPrice : plan.monthlyPrice;
+          return (
+            <div
+              key={plan.name}
+              className={`${styles["pricing-row"]} ${
+                plan.featured ? styles["pricing-row-featured"] : styles["pricing-row-elevated"]
+              }`}
+            >
+              <div className={styles["pricing-col-left"]}>
+                <div className={styles["pricing-plan-head"]}>
+                  <div className={styles["pricing-name-line"]}>
+                    <h3 className={styles["pricing-plan-name"]}>{plan.name}</h3>
+                    {plan.featured && <span className={styles["pricing-popular"]}>Most Popular</span>}
+                  </div>
+                  <p className={styles["pricing-plan-desc"]}>{plan.description}</p>
+                </div>
+
+                <Link
+                  href="/signup"
+                  className={plan.featured ? styles["featured-cta-full"] : styles["dark-btn-full"]}
+                >
+                  {plan.cta}
+                </Link>
               </div>
-              {pricingAnnual && plan.annualPrice !== plan.monthlyPrice && (
-                <p className="lp-pricing-note-annual">billed annually</p>
-              )}
-              <p className="lp-pricing-videos">{plan.videos}</p>
-              <ul className="lp-pricing-features">
-                {plan.features.map(f => (
-                  <li key={f} className="lp-pricing-feature">
-                    <span className="lp-pricing-check">&#10003;</span>{f}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/signup" className={plan.featured ? "lp-btn-ink lp-btn-block" : "lp-btn-outline lp-btn-block"}>
-                {plan.cta}
-              </Link>
+
+              <div className={styles["pricing-col-right"]}>
+                <div className={styles["pricing-price-block"]}>
+                  <span className={styles["pricing-price"]}>{price}</span>
+                  {plan.periodLabel && <span className={styles["pricing-period"]}>{plan.periodLabel}</span>}
+                  {annual && plan.annualPrice !== plan.monthlyPrice && (
+                    <span className={styles["pricing-billed"]}>billed annually</span>
+                  )}
+                </div>
+
+                <div className={styles["pricing-features-block"]}>
+                  <p className={styles["pricing-features-label"]}>
+                    Features &middot; {plan.videos} :
+                  </p>
+                  <ul className={styles["pricing-features-list"]}>
+                    {plan.features.map((feature) => (
+                      <li key={feature} className={styles["pricing-feature-item"]}>
+                        <span className={styles["pricing-check-icon"]} aria-hidden="true">
+                          <Icon icon={Tick02Icon} size={14} strokeWidth={2.2} />
+                        </span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
-        <p className="lp-pricing-footer-note">All plans include a 7-day free trial. No credit card required.</p>
+          );
+        })}
       </div>
     </section>
   );

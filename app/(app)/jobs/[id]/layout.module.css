@@ -1,0 +1,10 @@
+/* Dark base behind the background video, so the page's light-on-dark text is
+   readable before the video has painted its first frame. Sits below the
+   global .bg-video (-2) and .bg-video-overlay (-1). */
+.underlay {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background-color: var(--ink);
+}

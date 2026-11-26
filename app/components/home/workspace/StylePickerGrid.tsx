@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Cancel01Icon, Search01Icon, Tick02Icon } from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
 import { STYLE_CARDS } from "../uploadConfig";
 import styles from "./StylePickerGrid.module.css";
 
@@ -38,7 +39,7 @@ export function StylePickerGrid({
 
         <div className={styles.controls}>
           <div className={styles["search-wrap"]}>
-            <Search size={14} className={styles["search-icon"]} aria-hidden="true" />
+            <Icon icon={Search01Icon} size={14} className={styles["search-icon"]} />
             <input
               type="search"
               className={styles["search-input"]}
@@ -48,7 +49,7 @@ export function StylePickerGrid({
             />
           </div>
           <button type="button" className={styles["close-btn"]} onClick={onClose}>
-            <X size={14} aria-hidden="true" />
+            <Icon icon={Cancel01Icon} size={14} />
             Done
           </button>
         </div>
@@ -78,7 +79,7 @@ export function StylePickerGrid({
                   />
                   {isSelected && (
                     <span className={styles["selected-badge"]}>
-                      <Check size={11} aria-hidden="true" />
+                      <Icon icon={Tick02Icon} size={11} strokeWidth={2} />
                       Selected
                     </span>
                   )}

@@ -1,6 +1,13 @@
 "use client";
 
 import { useRef } from "react";
+import {
+  Add01Icon,
+  Cancel01Icon,
+  ImageUploadIcon,
+  ZoomInAreaIcon,
+} from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
 import { ControlRow } from "./ControlRow";
 import {
   ASPECT_RATIO_OPTIONS,
@@ -41,11 +48,7 @@ export function UploadCard({ job }: { job: UploadJob }) {
           {files.length === 0 ? (
             <div className="empty-state">
               <button type="button" className="upload-icon-btn" onClick={onBrowseClick} aria-label="Choose files to upload">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 15V3" />
-                  <path d="M8.5 6.5L12 3l3.5 3.5" />
-                  <path d="M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" />
-                </svg>
+                <Icon icon={ImageUploadIcon} size={22} />
               </button>
               <h3>Drop your photos here</h3>
               <p className="formats">JPEG, PNG, WebP supported</p>
@@ -58,14 +61,11 @@ export function UploadCard({ job }: { job: UploadJob }) {
                   <div key={i} className="thumb">
                     <div className="thumb-image-wrap">
                       <img src={previewUrls[i]} alt={f.name} />
-                      <button type="button" className="thumb-remove" onClick={() => removeFile(i)} aria-label={`Remove ${f.name}`}>×</button>
+                      <button type="button" className="thumb-remove" onClick={() => removeFile(i)} aria-label={`Remove ${f.name}`}>
+                        <Icon icon={Cancel01Icon} size={13} strokeWidth={1.75} />
+                      </button>
                       <button type="button" className="thumb-zoom" onClick={() => setLightboxIndex(i)} aria-label={`View ${f.name}`} title="View larger">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="m20 20-3.5-3.5" />
-                          <path d="M11 8v6" />
-                          <path d="M8 11h6" />
-                        </svg>
+                        <Icon icon={ZoomInAreaIcon} size={14} />
                       </button>
                     </div>
                     <textarea
@@ -78,7 +78,9 @@ export function UploadCard({ job }: { job: UploadJob }) {
                     />
                   </div>
                 ))}
-                <button type="button" className="thumb-add" onClick={onBrowseClick} aria-label="Add more photos">+</button>
+                <button type="button" className="thumb-add" onClick={onBrowseClick} aria-label="Add more photos">
+                  <Icon icon={Add01Icon} size={20} />
+                </button>
               </div>
               <p className="fineprint" style={{ marginTop: "12px", textAlign: "center" }}>
                 {photoCountLabel(files.length)} · drag more here or click +

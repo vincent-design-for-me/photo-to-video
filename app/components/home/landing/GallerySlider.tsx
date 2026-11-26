@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { ArrowLeftRightIcon } from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
 
 export function GallerySlider({ beforeSrc, afterSrc, label }: { beforeSrc: string; afterSrc: string; label: string }) {
   const [pos, setPos] = useState(50);
@@ -32,9 +34,7 @@ export function GallerySlider({ beforeSrc, afterSrc, label }: { beforeSrc: strin
       <img className="ba-slider-img" src={beforeSrc} alt={`${label} before`} style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }} />
       <div className="ba-divider" style={{ left: `${pos}%` }} onMouseDown={(e) => { e.stopPropagation(); onDragStart(e); }}>
         <div className="ba-handle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M8 6l-6 6 6 6" /><path d="M16 6l6 6-6 6" />
-          </svg>
+          <Icon icon={ArrowLeftRightIcon} size={16} strokeWidth={2} />
         </div>
       </div>
       <span className="ba-chip ba-chip-left">Before</span>

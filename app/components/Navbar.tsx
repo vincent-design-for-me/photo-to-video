@@ -14,28 +14,21 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: sessionData, isPending } = authClient.useSession();
-  const [user, setUser] = useState<AuthUser | null>(initialUser);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
   const [sliderStyle, setSliderStyle] = useState<React.CSSProperties>({});
 
-  useEffect(() => {
-    setUser(initialUser);
-  }, [initialUser]);
-
-  useEffect(() => {
-    if (isPending) return;
-    if (sessionData?.user) {
-      setUser({
-        id: sessionData.user.id,
-        email: sessionData.user.email,
-        name: sessionData.user.name,
-      });
-    } else {
-      setUser(null);
-    }
-  }, [sessionData, isPending]);
+  // Derived during render rather than mirrored into state, so the right header
+  // is there on the first paint: the server-provided user covers the moment
+  // before the client session resolves, then the client session takes over.
+  const sessionUser = sessionData?.user;
+  const user: AuthUser | null = isPending
+    ? initialUser
+    : sessionUser
+      ? { id: sessionUser.id, email: sessionUser.email, name: sessionUser.name }
+      : null;
+  const signedIn = Boolean(user);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -58,36 +51,18 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
       transform: `translateX(${activeRect.left - pillRect.left - 4}px)`,
       opacity: 1,
     });
-  }, [pathname, user]);
+  }, [pathname, signedIn]);
 
-  const [scrolled, setScrolled] = useState(false);
+  // The unauthenticated marketing landing page renders its own floating pill navigation.
+  if (pathname === "/" && !user) return null;
 
-  useEffect(() => {
-    // Light-editorial studio surfaces (authenticated workspace) always use dark-ink header.
-    if (pathname === "/" && Boolean(user)) {
-      setScrolled(true);
-      return;
-    }
-    if (pathname !== "/") { setScrolled(false); return; }
-    function onScroll() {
-      const target = document.getElementById("how-it-works");
-      if (!target) return;
-      setScrolled(target.getBoundingClientRect().top <= 70);
-    }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [pathname, user]);
-
-  const isAuth = pathname.startsWith("/login") || pathname.startsWith("/signup") ||
-    pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password");
-  if (isAuth) return null;
+  // Light-editorial studio surfaces (authenticated workspace) always use dark-ink header.
+  const scrolled = pathname === "/";
 
   const initials = user?.email?.slice(0, 2).toUpperCase() ?? "?";
 
   async function handleSignOut() {
     await authClient.signOut();
-    setUser(null);
     setOpen(false);
     router.push("/login");
     router.refresh();
@@ -101,7 +76,7 @@ export default function Navbar({ initialUser = null }: NavbarProps) {
   return (
     <>
       <header className={`site-header${scrolled ? " site-header--scrolled" : ""}`}>
-        <a href="/" className="logo">Photo to Video</a>
+        <Link href="/" className="logo">Photo to Video</Link>
         <div className="nav-pill" ref={pillRef}>
           <span className="nav-pill-slider" style={sliderStyle} />
           {navItems.map(({ href, label }) => (

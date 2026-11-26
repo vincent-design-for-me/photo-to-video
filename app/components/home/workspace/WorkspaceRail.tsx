@@ -3,18 +3,21 @@
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import {
-  ArrowRight,
-  ChevronRight,
-  Clock,
-  FolderOpen,
-  Maximize2,
-  Pencil,
-  Plus,
-  Sparkles,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+  Add01Icon,
+  AiEditingIcon,
+  AiVideoIcon,
+  Album02Icon,
+  ArrowRight01Icon,
+  ArrowRight02Icon,
+  Cancel01Icon,
+  Delete02Icon,
+  FourKIcon,
+  HdIcon,
+  ImageUploadIcon,
+  Timer02Icon,
+  ZoomInAreaIcon,
+} from "@hugeicons-pro/core-stroke-rounded";
+import { Icon } from "@/app/components/Icon";
 import {
   ASPECT_RATIO_OPTIONS,
   MAX_PHOTOS,
@@ -88,7 +91,7 @@ export function WorkspaceRail({
         </div>
         {hasFiles && (
           <button type="button" className={styles["clear-btn"]} onClick={clearFiles}>
-            <Trash2 size={13} aria-hidden="true" />
+            <Icon icon={Delete02Icon} size={13} />
             Clear
           </button>
         )}
@@ -100,7 +103,7 @@ export function WorkspaceRail({
           <div className={styles["section-head"]}>
             <span className={styles["section-label"]}>1. Room photos</span>
             {hasFiles && (
-              <span className={styles["section-hint"]}>Tap pencil to add notes</span>
+              <span className={styles["section-hint"]}>Tap edit icon to add notes</span>
             )}
           </div>
 
@@ -120,7 +123,7 @@ export function WorkspaceRail({
                   onClick={onBrowseClick}
                   aria-label="Choose room photos"
                 >
-                  <Upload size={18} aria-hidden="true" />
+                  <Icon icon={ImageUploadIcon} size={19} />
                 </button>
                 <p className={styles["empty-title"]}>Drop room photos here</p>
                 <p className={styles["empty-sub"]}>JPEG, PNG, or WebP · up to {MAX_PHOTOS} shots</p>
@@ -132,7 +135,7 @@ export function WorkspaceRail({
                     <Popover.Root open={reuseOpen} onOpenChange={setReuseOpen}>
                       <Popover.Trigger asChild>
                         <button type="button" className={styles["secondary-pill"]}>
-                          <FolderOpen size={13} aria-hidden="true" />
+                          <Icon icon={Album02Icon} size={13} />
                           Past uploads
                         </button>
                       </Popover.Trigger>
@@ -142,7 +145,7 @@ export function WorkspaceRail({
                             <p className={styles["popover-title"]}>Reuse from past projects</p>
                             <Popover.Close asChild>
                               <button type="button" className={styles["popover-close"]} aria-label="Close">
-                                <X size={14} />
+                                <Icon icon={Cancel01Icon} size={14} />
                               </button>
                             </Popover.Close>
                           </div>
@@ -185,7 +188,7 @@ export function WorkspaceRail({
                           aria-label={`Remove ${file.name}`}
                           title="Remove photo"
                         >
-                          <X size={12} />
+                          <Icon icon={Cancel01Icon} size={12} strokeWidth={1.75} />
                         </button>
 
                         <Popover.Root
@@ -201,7 +204,7 @@ export function WorkspaceRail({
                               aria-label={`Edit note for photo ${i + 1}`}
                               title={hasNote ? "Edit instruction (saved)" : "Add instruction for this photo"}
                             >
-                              <Pencil size={11} />
+                              <Icon icon={AiEditingIcon} size={12} />
                             </button>
                           </Popover.Trigger>
                           <Popover.Portal>
@@ -210,7 +213,7 @@ export function WorkspaceRail({
                                 <p className={styles["popover-title"]}>Photo {i + 1} instruction</p>
                                 <Popover.Close asChild>
                                   <button type="button" className={styles["popover-close"]} aria-label="Close">
-                                    <X size={14} />
+                                    <Icon icon={Cancel01Icon} size={14} />
                                   </button>
                                 </Popover.Close>
                               </div>
@@ -240,7 +243,7 @@ export function WorkspaceRail({
                           aria-label={`Zoom ${file.name}`}
                           title="View larger"
                         >
-                          <Maximize2 size={11} />
+                          <Icon icon={ZoomInAreaIcon} size={12} />
                         </button>
                       </div>
                     );
@@ -253,7 +256,7 @@ export function WorkspaceRail({
                       onClick={onBrowseClick}
                       aria-label="Add more photos"
                     >
-                      <Plus size={18} aria-hidden="true" />
+                      <Icon icon={Add01Icon} size={18} />
                       <span>Add</span>
                     </button>
                   )}
@@ -265,7 +268,7 @@ export function WorkspaceRail({
                     <Popover.Root open={reuseOpen} onOpenChange={setReuseOpen}>
                       <Popover.Trigger asChild>
                         <button type="button" className={styles["reuse-link"]}>
-                          <FolderOpen size={12} aria-hidden="true" />
+                          <Icon icon={Album02Icon} size={12} />
                           Past uploads
                         </button>
                       </Popover.Trigger>
@@ -275,7 +278,7 @@ export function WorkspaceRail({
                             <p className={styles["popover-title"]}>Reuse from past projects</p>
                             <Popover.Close asChild>
                               <button type="button" className={styles["popover-close"]} aria-label="Close">
-                                <X size={14} />
+                                <Icon icon={Cancel01Icon} size={14} />
                               </button>
                             </Popover.Close>
                           </div>
@@ -338,7 +341,7 @@ export function WorkspaceRail({
             </div>
             <span className={styles["style-change"]}>
               {pickingStyle ? "Close" : "Change"}
-              <ChevronRight size={12} aria-hidden="true" />
+              <Icon icon={ArrowRight01Icon} size={12} />
             </span>
           </button>
         </section>
@@ -389,6 +392,8 @@ export function WorkspaceRail({
           <div className={styles["tile-grid-3"]} role="radiogroup" aria-label="Resolution">
             {RESOLUTION_OPTIONS.map((opt) => {
               const selected = selectedResolution === opt.value;
+              const resIcon =
+                opt.value === "4k" ? FourKIcon : opt.value === "1080p" ? HdIcon : Timer02Icon;
               return (
                 <button
                   key={opt.value}
@@ -400,6 +405,7 @@ export function WorkspaceRail({
                   }${!hasFiles && !selected ? ` ${styles["setting-tile-muted"]}` : ""}`}
                   onClick={() => setSelectedResolution(opt.value)}
                 >
+                  <Icon icon={resIcon} size={18} />
                   <span className={styles["tile-primary"]}>{opt.label}</span>
                   <span className={styles["tile-sub"]}>{opt.hint}</span>
                 </button>
@@ -414,7 +420,7 @@ export function WorkspaceRail({
         {errorMessage && <p className={styles["error-banner"]}>{errorMessage}</p>}
         <div className={styles["estimate-row"]}>
           <span className={styles["estimate-meta"]}>
-            <Clock size={12} aria-hidden="true" />
+            <Icon icon={Timer02Icon} size={13} />
             {message || estimateText}
           </span>
           <span>{currentStyle.name}</span>
@@ -424,9 +430,9 @@ export function WorkspaceRail({
           className={styles["generate-btn"]}
           disabled={busy || !hasFiles}
         >
-          <Sparkles size={15} aria-hidden="true" />
+          <Icon icon={AiVideoIcon} size={16} strokeWidth={1.75} />
           <span>{busy ? message || "Starting…" : "Generate Video"}</span>
-          {!busy && <ArrowRight size={15} aria-hidden="true" />}
+          {!busy && <Icon icon={ArrowRight02Icon} size={15} strokeWidth={1.75} />}
         </button>
       </div>
     </form>
