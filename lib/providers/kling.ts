@@ -4,6 +4,12 @@ import { DEFAULT_RETRYABLE_STATUSES, fetchWithRetry, isTransientFetchError } fro
 import { createPlaceholderClip } from "../video/ffmpeg";
 import { buildKlingAuthorization } from "./klingAuth";
 import { checkKlingSkillTaskOnce, generateKlingSkillClip, submitKlingSkillTask } from "./klingSkill";
+import {
+  checkNovartVideoTaskOnce,
+  generateNovartVideoClip,
+  getNovartDownloadHeaders,
+  submitNovartVideoTask
+} from "./novartVideo";
 
 export type GenerateKlingClipInput = {
   jobId: string;
@@ -12,10 +18,11 @@ export type GenerateKlingClipInput = {
   prompt: string;
   aspectRatio: string;
   clipSeconds: number;
+  resolution?: string;
   outputPath: string;
 };
 
-export type KlingProviderKind = "image2video" | "skill";
+export type KlingProviderKind = "image2video" | "skill" | "novart";
 
 export type KlingSubmissionResult =
   | { kind: "placeholder"; outputPath: string }
@@ -46,6 +53,14 @@ export async function submitKlingClipTask(
   input: GenerateKlingClipInput
 ): Promise<KlingSubmissionResult> {
   await mkdir(path.dirname(input.outputPath), { recursive: true });
+
+  if ((process.env.KLING_PROVIDER ?? "image2video") === "novart") {
+    const novartSub = await submitNovartVideoTask(input);
+    if (novartSub.kind === "placeholder") {
+      return novartSub;
+    }
+    return { kind: "remote", provider: "novart", taskId: novartSub.taskId };
+  }
 
   const initialAuth = getFreshKlingAuthorization();
 
@@ -128,6 +143,9 @@ export async function checkKlingClipTaskOnce(
   provider: KlingProviderKind,
   taskId: string
 ): Promise<KlingPollStepResult> {
+  if (provider === "novart") {
+    return checkNovartVideoTaskOnce(taskId);
+  }
   if (provider === "skill") {
     return checkKlingSkillTaskOnce(taskId, getFreshKlingAuthorization);
   }
@@ -187,9 +205,13 @@ export async function checkKlingClipTaskOnce(
  */
 export async function downloadKlingVideo(videoUrl: string, outputPath: string): Promise<string> {
   await mkdir(path.dirname(outputPath), { recursive: true });
+  const headers =
+    (process.env.KLING_PROVIDER ?? "image2video") === "novart"
+      ? getNovartDownloadHeaders(videoUrl)
+      : {};
   const videoResponse = await fetchWithRetry(
     videoUrl,
-    {},
+    { headers },
     {
       timeoutMs: 90_000,
       maxAttempts: 3,
@@ -206,7 +228,11 @@ export async function downloadKlingVideo(videoUrl: string, outputPath: string): 
 }
 
 export async function generateKlingClip(input: GenerateKlingClipInput): Promise<string> {
-  if ((process.env.KLING_PROVIDER ?? "image2video") === "skill") {
+  const provider = process.env.KLING_PROVIDER ?? "image2video";
+  if (provider === "novart") {
+    return generateNovartVideoClip(input);
+  }
+  if (provider === "skill") {
     return generateKlingSkillClip(input, getFreshKlingAuthorization);
   }
 

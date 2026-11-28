@@ -275,6 +275,7 @@ export async function runVideoPhase(jobId: string): Promise<void> {
           prompt: motionPrompt,
           aspectRatio: config.aspectRatio,
           clipSeconds: config.clipSeconds,
+          resolution: config.resolution,
           outputPath: localClipPath
         });
 
@@ -615,6 +616,7 @@ export async function submitClipGenerationStep(
       prompt: motionPrompt,
       aspectRatio: config.aspectRatio,
       clipSeconds: config.clipSeconds,
+      resolution: config.resolution,
       outputPath: localClipPath,
     });
 
